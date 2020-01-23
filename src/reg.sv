@@ -18,7 +18,6 @@ module regf
    
    (* mark_debug = "true" *) reg [31:0]        regs[32];
    
-   // initialize
    integer           i;
    initial begin
       for (i=0; i<32; i++) begin
@@ -26,7 +25,6 @@ module regf
       end
    end
 
-   // read
    always @(posedge clk) begin
       if(rstn) begin
          if (r_enabled) begin

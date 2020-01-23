@@ -3,19 +3,19 @@
 
 module fetch
   (input wire         clk,
-   input wire        rstn,
-   input wire        enabled,
-   input wire [31:0] pc,
+   input wire         rstn,
+   input wire         enabled,
+   input wire [31:0]  pc,
 
    output wire [31:0] rom_addr,
-   input wire [31:0] rom_data,
+   input wire [31:0]  rom_data,
   
    output wire        completed,
-   output reg [31:0] pc_n,
-   output reg [31:0] instr_raw);
+   output reg [31:0]  pc_n,
+   output reg [31:0]  instr_raw);
 
-   reg               state;
-   reg _completed;
+   reg                state;
+   reg                _completed;
    assign completed = _completed & !enabled;
    
    assign rom_addr = pc;     

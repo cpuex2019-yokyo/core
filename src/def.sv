@@ -62,7 +62,6 @@ typedef struct {
    reg         sra;
    reg         i_or;   
    reg         i_and;
-   // TODO: there are some more rv32i instructions required for OS
    
    /////////   
    // rv32m
@@ -77,47 +76,13 @@ typedef struct {
    reg         remu;
 
    /////////   
-   // rv32f
-   /////////
-   reg         flw;
-   reg         fsw;
-   reg         fadd;
-   reg         fsub;
-   reg         fmul;
-   reg         fdiv;
-   reg         fsqrt;
-   reg         fsgnj;
-   reg         fsgnjn;
-   reg         fsgnjx;
-   reg         fcvtws;
-   reg         fmvxw;
-   reg         feq;
-   reg         fle;
-   reg         fcvtsw;
-   reg         fmvwx;
-   
-   /////////   
    // rv32a
    /////////
    // TODO
    
-   /////////   
-   // rv32c
-   /////////
-   // TODO
-   
-   /////////   
-   // control flags
-   /////////
-   reg         rv32f;      
-   reg         writes_to_freg_as_rv32f;   
-   reg         writes_to_reg_as_rv32f;
-   reg         writes_to_reg; // writes_to_reg_as_rv32f + rv32im instrs
-   reg         uses_freg_as_rv32f;
-   reg         uses_reg_as_rv32f;
-   reg         uses_reg; // uses_reg_as_rv32f + rv32im instrs
+   reg         uses_reg; // rv32ima instrs
       
-   reg         is_store;   
+   reg         is_store;
    reg         is_load;   
    reg         is_conditional_jump;
 } instructions;

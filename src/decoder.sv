@@ -88,75 +88,6 @@ module decoder
    wire              _divu = (opcode == 7'b0110011) && (funct3 == 3'b101) && (funct7 == 7'b0000001);
    wire              _rem = (opcode == 7'b0110011) && (funct3 == 3'b110) && (funct7 == 7'b0000001);
    wire              _remu = (opcode == 7'b0110011) && (funct3 == 3'b111) && (funct7 == 7'b0000001);
-
-   /////////   
-   // rv32f
-   /////////
-   wire              _flw = (opcode == 7'b0000111) && (funct3 == 3'b010);
-   wire              _fsw = (opcode == 7'b0100111) && (funct3 == 3'b010);
-   wire              _fadd = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0000000);
-   wire              _fsub = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0000100);
-   wire              _fmul = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0001000);
-   wire              _fdiv = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0001100);
-   wire              _fsqrt = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0101100) && (rs2 == 5'b0);
-   wire              _fsgnj = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b0010000);
-   wire              _fsgnjn = (opcode == 7'b1010011) && (funct3 == 3'b001) && (funct7 == 7'b0010000);
-   wire              _fsgnjx = (opcode == 7'b1010011) && (funct3 == 3'b010) && (funct7 == 7'b0010000);         
-   wire              _fcvtws = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b1100000) && (rs2 == 5'b00000);
-   wire              _fmvxw = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b1110000) && (rs2 == 5'b00000);
-   wire              _feq = (opcode == 7'b1010011) && (funct3 == 3'b010) && (funct7 == 7'b1010000);
-   wire              _fle = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b1010000);
-   wire              _fcvtsw = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b1101000) && (rs2 == 5'b00000);
-   wire              _fmvwx = (opcode == 7'b1010011) && (funct3 == 3'b000) && (funct7 == 7'b1111000) && (rs2 == 5'b00000);
-
-   wire              _writes_to_freg_as_rv32f = (_flw
-                                                 || _fadd 
-                                                 || _fsub
-                                                 || _fmul
-                                                 || _fdiv
-                                                 || _fsqrt
-                                                 || _fsgnj
-                                                 || _fsgnjn
-                                                 || _fsgnjx
-                                                 || _fcvtsw
-                                                 || _fmvwx);
-   wire              _writes_to_reg_as_rv32f =  (_feq
-                                                 || _fle
-                                                 || _fcvtws
-                                                 || _fmvxw);
-
-   wire              _uses_freg_as_rv32f = (_fsw
-                                            ||_fadd 
-                                            || _fsub
-                                            || _fmul
-                                            || _fdiv
-                                            || _fsqrt
-                                            || _fsgnj
-                                            || _fsgnjn
-                                            || _fsgnjx
-                                            || _fcvtws
-                                            || _feq
-                                            || _fle
-                                            || _fmvxw);
-                                            
-   wire              _uses_reg_as_rv32f = (_fsw || _flw ||  _fcvtsw || _fmvwx);
-      
-   wire              _rv32f = (_fsw
-                               || _flw
-                               || _fadd 
-                               || _fsub
-                               || _fmul
-                               || _fdiv
-                               || _fsqrt
-                               || _fsgnj
-                               || _fsgnjn
-                               || _fsgnjx
-                               || _fcvtsw
-                               || _fmvwx
-                               || _feq
-                               || _fle
-                               || _fcvtws
-                               || _fmvxw);
    
    wire              _is_store = (_sb
                                   || _sh
@@ -247,49 +178,16 @@ module decoder
             instr.remu <= _remu;
 
             /////////   
-            // rv32f
-            /////////
-            instr.flw <= _flw;
-            instr.fsw <= _fsw;
-            instr.fadd <= _fadd;
-            instr.fsub <= _fsub;
-            instr.fmul <= _fmul;
-            instr.fdiv <= _fdiv;
-            instr.fsqrt <= _fsqrt;
-            instr.fsgnj <= _fsgnj;
-            instr.fsgnjn <= _fsgnjn;
-            instr.fsgnjx <= _fsgnjx;
-            instr.fcvtws <= _fcvtws;
-            instr.fmvxw <= _fmvxw;
-            instr.feq <= _feq;
-            instr.fle <= _fle;
-            instr.fcvtsw <= _fcvtsw;
-            instr.fmvwx <= _fmvwx; 
-            /////////   
-            
-            /////////   
             // rv32a
-            /////////
-            // TODO
-
-            /////////   
-            // rv32c
             /////////
             // TODO
 
             /////////   
             // other controls
             /////////            
-            instr.rv32f <= _rv32f;
-            instr.writes_to_freg_as_rv32f <= _writes_to_freg_as_rv32f;                        
-            instr.writes_to_reg_as_rv32f <=  _writes_to_reg_as_rv32f;            
             instr.writes_to_reg <= !(_is_conditional_jump
-                                     || _is_store
-                                     || _writes_to_freg_as_rv32f);
-            instr.uses_reg_as_rv32f <= _uses_reg_as_rv32f;            
-            instr.uses_freg_as_rv32f <= _uses_freg_as_rv32f;
-            instr.uses_reg <= !_rv32f || _uses_reg_as_rv32f;
-            
+                                     || _is_store);
+                        
             instr.is_store <= _is_store;                        
             instr.is_load <= _is_load;               
             instr.is_conditional_jump <=  _is_conditional_jump;            
@@ -300,7 +198,6 @@ module decoder
             
             instr.pc <= pc;
             
-            // NOTE: this sign extention may have bugs; oops...
             instr.imm <= i_type ? (instr_raw[31] ? {~20'b0, instr_raw[31:20]}:
                                    {20'b0, instr_raw[31:20]}):
                          s_type ? (instr_raw[31] ? {~20'b0, instr_raw[31:25], instr_raw[11:7]}:

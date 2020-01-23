@@ -95,7 +95,6 @@ module core
    // stage outputs
    instructions instr_de_out;   
    regvpair register_de_out;
-   regvpair fregister_de_out;
    
    wire [4:0]         rs1_a;
    wire [4:0]         rs2_a;
@@ -128,19 +127,6 @@ module core
       
                    .register(register_de_out));   
    
-   wire               freg_w_enable;   
-   regf _fregisters(.clk(clk), 
-                    .rstn(rstn),
-                    .r_enabled(decode_enabled),
-      
-                    .w_enable(freg_w_enable),
-                    .w_addr(reg_w_dest),
-                    .w_data(reg_w_data),
-
-                    .rs1(rs1_a),
-                    .rs2(rs2_a),
-      
-                    .register(fregister_de_out));
    
    // exec
    /////////
@@ -153,12 +139,10 @@ module core
    // stage input
    (* mark_debug = "true" *) instructions instr_de_in;   
    (* mark_debug = "true" *) regvpair register_de_in;
-   (* mark_debug = "true" *) regvpair fregister_de_in;
    
    // stage outputs
    instructions instr_em_out;   
    regvpair register_em_out;
-   regvpair fregister_em_out;
    (* mark_debug = "true" *) wire [31:0]        result_em_out;
    (* mark_debug = "true" *) wire               is_jump_chosen_em_out;
    (* mark_debug = "true" *) wire [31:0]        jump_dest_em_out;   
@@ -169,13 +153,11 @@ module core
                     .enabled(exec_enabled),
                     .instr(instr_de_in),
                     .register(register_de_in),
-                    .fregister(fregister_de_in),                    
       
                     .completed(is_exec_done),
       
                     .instr_n(instr_em_out),
                     .register_n(register_em_out), 
-                    .fregister_n(fregister_em_out),      
                     .result(result_em_out), 
                     .is_jump_chosen(is_jump_chosen_em_out), 
                     .jump_dest(jump_dest_em_out));
@@ -191,7 +173,6 @@ module core
    // stage inputs
    instructions instr_em_in;   
    regvpair register_em_in;
-   regvpair fregister_em_in;
    reg [31:0]         result_em_in;
    
    // stage outputs
@@ -204,7 +185,6 @@ module core
             .enabled(mem_enabled),
             .instr(instr_em_in),
             .register(register_em_in),
-            .fregister(fregister_em_in),
             .addr(result_em_in),
 
             .axi_araddr(axi_araddr), 
@@ -257,7 +237,6 @@ module core
                 .data(result_mw_in),
 
                 .reg_w_enable(reg_w_enable),
-                .freg_w_enable(freg_w_enable),
 
                 .reg_w_dest(reg_w_dest),
                 .reg_w_data(reg_w_data),
@@ -271,21 +250,12 @@ module core
                                                          && instr_em_out.writes_to_reg
                                                          && ((instr_de_out.rs1 != 0 && instr_de_out.rs1 == instr_em_out.rd)
                                                              || (instr_de_out.rs2 != 0 && instr_de_out.rs2 == instr_em_out.rd))) ;   
-   wire               freg_onestep_forwarding_required = (instr_de_out.uses_freg_as_rv32f 
-                                                          && instr_em_out.writes_to_freg_as_rv32f
-                                                          && (instr_de_out.rs1 == instr_em_out.rd 
-                                                              || instr_de_out.rs2 == instr_em_out.rd));
    
    wire               reg_twostep_forwarding_required = (instr_de_out.uses_reg 
                                                          && instr_mw_out.writes_to_reg
                                                          && ((instr_de_out.rs1 != 0 && instr_de_out.rs1 == instr_mw_out.rd)
                                                              || (instr_de_out.rs2 != 0 && instr_de_out.rs2 == instr_mw_out.rd))) ;   
-   wire               freg_twostep_forwarding_required = (instr_de_out.uses_freg_as_rv32f 
-                                                          && instr_mw_out.writes_to_freg_as_rv32f
-                                                          && (instr_de_out.rs1 == instr_mw_out.rd 
-                                                              || instr_de_out.rs2 == instr_mw_out.rd));
    
-   wire               onestep_forwarding_required = reg_onestep_forwarding_required || freg_onestep_forwarding_required;
 
    (* mark_debug = "true" *) reg [128:0]        total_executed_instrs;
    
@@ -337,20 +307,6 @@ module core
                                 && is_mem_available 
                                 && instr_mw_out.rd == instr_de_out.rs2)? result_mw_out:
                                register_de_out.rs2;
-         fregister_de_in.rs1 <= (freg_onestep_forwarding_required 
-                                 && is_exec_available 
-                                 && instr_em_out.rd == instr_de_out.rs1)? result_em_out:
-                                (freg_twostep_forwarding_required 
-                                 && is_mem_available 
-                                 && instr_mw_out.rd == instr_de_out.rs1)? result_mw_out:
-                                fregister_de_out.rs1;
-         fregister_de_in.rs2 <= (freg_onestep_forwarding_required  
-                                 && is_exec_available
-                                 && instr_em_out.rd == instr_de_out.rs2)? result_em_out:
-                                (freg_twostep_forwarding_required
-                                 && is_mem_available
-                                 && instr_mw_out.rd == instr_de_out.rs2)? result_mw_out:
-                                fregister_de_out.rs2;
       end
    endtask
    
@@ -358,7 +314,6 @@ module core
       begin
          instr_em_in <= instr_em_out;
          register_em_in <= register_em_out;
-         fregister_em_in <= fregister_em_out;
          result_em_in <= result_em_out;         
       end
    endtask

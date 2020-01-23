@@ -5,7 +5,6 @@ module mem(
            input wire        enabled,
            input             instructions instr,
            input             regvpair register,
-           input             regvpair fregister,
 
            input wire [31:0] addr,
 
@@ -39,7 +38,7 @@ module mem(
            output reg [3:0]  axi_wstrb,
            output reg        axi_wvalid,
 
-           output wire        completed,
+           output wire       completed,
            output            instructions instr_n,
            output reg [31:0] result);
    
@@ -122,9 +121,6 @@ module mem(
                end  else if (instr.sw) begin
                   axi_wstrb <= 4'b1111;
                   axi_wdata <= register.rs2;                  
-               end else if (instr.fsw) begin
-                  axi_wstrb <= 4'b1111;
-                  axi_wdata <= fregister.rs2;  
                end else begin
                   // TODO    
                end
@@ -158,8 +154,6 @@ module mem(
                   endcase
                end else if (instr_n.lw) begin
                   result <= axi_rdata;       
-               end else if (instr_n.flw) begin
-                  result <= axi_rdata;                                           
                end else if (instr_n.lbu) begin                     
                   case(addr[1:0])
                     2'b11: result = {24'b0, axi_rdata[31:24]};

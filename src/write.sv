@@ -10,7 +10,6 @@ module write(
              input wire [31:0]  data,
 
              output wire        reg_w_enable,
-             output wire        freg_w_enable,
 
              output wire [4:0]  reg_w_dest,
              output wire [31:0] reg_w_data,
@@ -21,7 +20,6 @@ module write(
    assign completed = _completed & !enabled;
    
    assign reg_w_enable = enabled &&  instr.writes_to_reg;   
-   assign freg_w_enable = enabled && instr.writes_to_freg_as_rv32f;
 
    assign reg_w_dest = instr.rd;
    assign reg_w_data = data;   
