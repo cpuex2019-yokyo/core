@@ -1,3 +1,3 @@
-# RISV-V implementation (rv32imasu) by Verilog
+# RISV-V implementation (rv32imasu) in System Verilog
 
 Not implemented yet.
