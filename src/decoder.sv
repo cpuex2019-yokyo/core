@@ -113,14 +113,11 @@ module decoder
                                              || _bltu 
                                              || _bgeu);
    
-
-      reg _completed;
-   assign completed = _completed & !enabled;
    
    always @(posedge clk) begin
       if (rstn) begin
          if (enabled) begin
-            _completed <= 1;            
+            completed <= 1;            
             
             /////////   
             // rv32i
@@ -222,8 +219,8 @@ module decoder
                                    {11'b0, instr_raw[31], instr_raw[19:12], instr_raw[20], instr_raw[30:21], 1'b0}):
                          32'b0;
          end
-      end else begin // if (rstn)
-         _completed <= 0;
+      end else begin
+         completed <= 0;
       end      
    end
 endmodule
