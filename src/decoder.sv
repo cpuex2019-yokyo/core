@@ -4,12 +4,19 @@
 module decoder
   (input wire         clk,
    input wire        rstn,
-   input wire [31:0] pc,
+
+   // control flags
    input wire        enabled,
-  
+   output reg        completed,
+
+   // bus
+   // none
+
+   // input
+   input wire [31:0] pc,  
    input wire [31:0] instr_raw,
 
-   output wire        completed,
+   // output
    output            instructions instr,
    output wire [4:0] rs1,
    output wire [4:0] rs2);
@@ -91,15 +98,14 @@ module decoder
    
    wire              _is_store = (_sb
                                   || _sh
-                                  || _sw
-                                  || _fsw);
+                                  || _sw);
+   
    wire              _is_load = (_lb
                                  || _lh
                                  || _lw
                                  || _lbu
-                                 || _lhu
-                                 || _flw);
-   
+                                 || _lhu);
+      
    wire              _is_conditional_jump = (_beq 
                                              || _bne 
                                              || _blt 
@@ -165,6 +171,8 @@ module decoder
             instr.i_or <= _or;
             instr.i_and <= _and;
 
+            // TODO
+
             /////////   
             // rv32m
             /////////
@@ -181,6 +189,11 @@ module decoder
             // rv32a
             /////////
             // TODO
+
+            /////////   
+            // rv32s
+            /////////
+            // TODO            
 
             /////////   
             // other controls

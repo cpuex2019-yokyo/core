@@ -1,12 +1,25 @@
 `ifndef _parameters_state_
  `define _parameters_state_
 
-typedef struct {  
+typedef struct packed {  
    reg [31:0]  rs1;  
    reg [31:0]  rs2;
 } regvpair;
 
-typedef struct {
+typedef enum reg { MEMREQ_READ = 0, MEMREQ_WRITE = 1} memreq_mode_t;
+
+typedef struct packed {
+   memreq_mode_t mode;
+   reg [31:0]  addr;
+   reg [31:0]  wdata;
+   reg [3:0]   wstrb;   
+} memreq;
+
+typedef struct packed {   
+   reg [31:0]  data;
+} memresp;
+
+typedef struct packed {
    /////////
    // decoded metadata
    /////////   
@@ -62,6 +75,8 @@ typedef struct {
    reg         sra;
    reg         i_or;   
    reg         i_and;
+
+   // TODO
    
    /////////   
    // rv32m
@@ -80,7 +95,15 @@ typedef struct {
    /////////
    // TODO
    
-   reg         uses_reg; // rv32ima instrs
+   /////////   
+   // rv32s
+   /////////
+   // TODO   
+
+   /////////   
+   // other controls
+   /////////
+   reg         writes_to_reg;
       
    reg         is_store;
    reg         is_load;   

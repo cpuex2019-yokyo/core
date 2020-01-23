@@ -3,51 +3,62 @@
 
 module fetch
   (input wire         clk,
-   input wire         rstn,
-   input wire         enabled,
-   input wire [31:0]  pc,
+   input wire        rstn,
 
-   output wire [31:0] rom_addr,
-   input wire [31:0]  rom_data,
+   // control flags
+   input wire        enabled,
+   output reg        completed,
+
+   // bus
+   output reg        request_enable,
+   output            memreq request,
+   input wire        response_enable,
+   input             memresp response,   
+
+   // input
+   input wire [31:0] pc,
   
-   output wire        completed,
-   output reg [31:0]  pc_n,
-   output reg [31:0]  instr_raw);
+   // output
+   output reg [31:0] pc_n,
+   output reg [31:0] instr_raw);
 
-   reg                state;
-   reg                _completed;
-   assign completed = _completed & !enabled;
    
-   assign rom_addr = pc;     
+   localparam WAITING_REQUEST = 0;
+   localparam WAITING_DONE = 1;
+   reg               state;
 
-   // initialize
+   task init;
+      begin
+         completed <= 0;      
+         state <= WAITING_REQUEST;         
+      end
+   endtask
+   
    initial begin
-      state <= 0;      
+      init();      
    end
    
-   // main
    always @(posedge clk) begin
       if(rstn) begin
-         if (enabled) begin
-            state <= 0;
-            _completed <= 0;
-            pc_n <= pc;
-         end else if (state == 0) begin
-            state <= 1;            
-         end else if (state == 1) begin
-            state <= 0;
+         if (state == WAITING_REQUEST && enabled) begin
+            completed <= 0;
             
-            _completed <= 1;
-            instr_raw <= rom_data;            
+            state <= WAITING_DONE;
+            request.mode <= MEMREQ_READ;
+            request.addr <= pc;            
+            request_enable <= 1;            
+            pc_n <= pc;
+         end else if (state == WAITING_DONE && response_enable) begin
+            completed <= 1;
+            
+            state <= WAITING_REQUEST;
+            instr_raw <= response.data;            
+         end else begin
+            completed <= 0;            
          end
       end else begin
-         state <= 0;
-         
-         _completed <= 0;
-         pc_n <= 0;
-         instr_raw <= 0;         
-      end
+         init();
+      end      
    end
 endmodule
-
 `default_nettype wire

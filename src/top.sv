@@ -4,12 +4,9 @@
 module core
   (input wire clk, 
    input wire         rstn,
-
-   // Bus for instr ROM
-   output wire [31:0] rom_addr,
-   input wire [31:0]  rom_data,
   
-   // Bus for MMU
+   // AXI4-Lite interface for MMU   
+   /////////
    // address read channel
    output reg [31:0]  axi_araddr,
    input wire         axi_arready,
@@ -40,79 +37,12 @@ module core
    output reg         axi_wvalid);
    
    
-   /////////////////////
-  // internals
-   /////////////////////
-   // TODO: use interface (including csr)
-   reg [31:0]         pc;
-   reg                stalling_for_mem_forwarding;
-   
-   /////////////////////
-   // stages
-   /////////////////////
-   
-   // fetch
-   /////////
-   // controls
-   (* mark_debug = "true" *) reg                fetch_enabled;
-   (* mark_debug = "true" *) reg                fetch_reset;   
-   (* mark_debug = "true" *) wire               is_fetch_done;
-
-   // pipeline regs
-   // None
-   
-   // stage outputs
-   wire [31:0]        pc_fd_out;
-   wire [31:0]        instr_fd_out;
-   
-   fetch _fetch(.clk(clk),
-                .rstn(rstn && !fetch_reset),
-      
-                .enabled(fetch_enabled),
-                .pc(pc),
-
-                .rom_addr(rom_addr),
-                .rom_data(rom_data),
-
-                .completed(is_fetch_done),
-                .pc_n(pc_fd_out),
-                .instr_raw(instr_fd_out));      
-
-   // decode & reg
-   /////////
-   // control flags
-   (* mark_debug = "true" *) reg                decode_enabled;
-   (* mark_debug = "true" *) reg                decode_reset;   
-   (* mark_debug = "true" *) wire               is_decode_done;
-   
-   // pipeline regs
-   // None
-   
-   // stage input
-   reg [31:0]         pc_fd_in;
-   reg [31:0]         instr_fd_in;
-   
-   // stage outputs
-   instructions instr_de_out;   
-   regvpair register_de_out;
-   
-   wire [4:0]         rs1_a;
-   wire [4:0]         rs2_a;
-   decoder _decoder(.clk(clk), 
-                    .rstn(rstn && !decode_reset),                    
-                    .enabled(decode_enabled),
-      
-                    .pc(pc_fd_in),      
-                    .instr_raw(instr_fd_in),                    
-      
-                    .completed(is_decode_done),
-                    .instr(instr_de_out),
-                    .rs1(rs1_a), .rs2(rs2_a));
-
    // registers
+   /////////
    wire [4:0]         reg_w_dest;
    wire [31:0]        reg_w_data;
-   
+
+   // general registers
    wire               reg_w_enable;   
    regf _registers(.clk(clk), 
                    .rstn(rstn),
@@ -125,16 +55,84 @@ module core
                    .w_addr(reg_w_dest),
                    .w_data(reg_w_data),
       
-                   .register(register_de_out));   
+                   .register(register_de_out));
+   
+   // csrs
+   // TODO
+
+   // program counter
+   reg [31:0]         pc;
    
    
-   // exec
+   // fetch stage
+   /////////
+   // control flags
+   (* mark_debug = "true" *) reg                fetch_enabled;
+   (* mark_debug = "true" *) reg                fetch_reset;   
+   (* mark_debug = "true" *) wire               is_fetch_done;
+
+   // bus
+   wire fetch_request_enable;
+   memreq fetch_req;
+   wire fetch_response_enable;
+   memresp fetch_res;
+   
+   // stage outputs
+   wire [31:0]        pc_fd_out;
+   wire [31:0]        instr_fd_out;   
+   
+   fetch _fetch(.clk(clk),
+                .rstn(rstn && !fetch_reset),      
+
+                .enabled(fetch_enabled),
+                .completed(is_fetch_done),
+
+                .request_enable(fetch_request_enable),
+                .request(fetch_request),
+                .response_enable(fetch_response_enable),
+                .response(fetch_response),
+
+                .pc(pc),
+               
+                .pc_n(pc_fd_out),
+                .instr_raw(instr_fd_out));      
+
+   // decode stage
+   /////////
+   // control flags
+   (* mark_debug = "true" *) reg                decode_enabled;
+   (* mark_debug = "true" *) reg                decode_reset;   
+   (* mark_debug = "true" *) wire               is_decode_done;
+      
+   // stage input
+   reg [31:0]         pc_fd_in;
+   reg [31:0]         instr_fd_in;
+   
+   // stage outputs
+   instructions instr_de_out;   
+   regvpair register_de_out;
+   
+   wire [4:0]         rs1_a;
+   wire [4:0]         rs2_a;
+   decoder _decoder(.clk(clk), 
+                    .rstn(rstn && !decode_reset),                    
+
+                    .enabled(decode_enabled),
+                    .completed(is_decode_done),      
+
+                    .pc(pc_fd_in),      
+                    .instr_raw(instr_fd_in),                    
+      
+                    .instr(instr_de_out),
+                    .rs1(rs1_a),
+                    .rs2(rs2_a));   
+   
+   // exec stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                exec_enabled;
    (* mark_debug = "true" *) reg                exec_reset;   
    (* mark_debug = "true" *) wire               is_exec_done;
-   wire               is_exec_available = is_exec_done && !exec_reset;   
    
    // stage input
    (* mark_debug = "true" *) instructions instr_de_in;   
@@ -151,24 +149,30 @@ module core
                     .rstn(rstn && !exec_reset),
       
                     .enabled(exec_enabled),
+                    .completed(is_exec_done),                    
+
                     .instr(instr_de_in),
                     .register(register_de_in),
-      
-                    .completed(is_exec_done),
-      
+            
                     .instr_n(instr_em_out),
                     .register_n(register_em_out), 
                     .result(result_em_out), 
                     .is_jump_chosen(is_jump_chosen_em_out), 
                     .jump_dest(jump_dest_em_out));
 
-   // mem
+   // mem stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                mem_enabled;
    (* mark_debug = "true" *) reg                mem_reset;   
    (* mark_debug = "true" *) wire               is_mem_done;
    wire               is_mem_available = is_mem_done && !mem_reset;   
+
+   // bus
+   wire mem_request_enable;
+   memreq mem_req;
+   wire mem_response_enable;
+   memresp mem_res;   
 
    // stage inputs
    instructions instr_em_in;   
@@ -178,15 +182,38 @@ module core
    // stage outputs
    instructions instr_mw_out;   
    wire [31:0]        result_mw_out;
-   
+
    mem _mem(.clk(clk), 
             .rstn(rstn && !mem_reset),
       
             .enabled(mem_enabled),
+            .completed(is_mem_done),
+
+            .request_enable(mem_request_enable),
+            .request(mem_request),
+            .response_enable(mem_response_enable),
+            .response(mem_response),  
+                        
             .instr(instr_em_in),
             .register(register_em_in),
             .addr(result_em_in),
+            .instr_n(instr_mw_out),
+            .result(result_mw_out));
 
+   mem_interface _mem_interface(
+            .clk(clk),
+            .rstn(rstn),
+
+            .fetch_request_enable(fetch_request_enable),
+            .fetch_request(fetch_request),
+            .fetch_response_enable(fetch_response_enable),
+            .fetch_response(fetch_response),            
+
+            .mem_request_enable(mem_request_enable),
+            .mem_request(mem_request),
+            .mem_response_enable(mem_response_enable),
+            .mem_response(mem_response),                                      
+            
             .axi_araddr(axi_araddr), 
             .axi_arready(axi_arready), 
             .axi_arvalid(axi_arvalid), 
@@ -209,14 +236,10 @@ module core
             .axi_wdata(axi_wdata), 
             .axi_wready(axi_wready), 
             .axi_wstrb(axi_wstrb), 
-            .axi_wvalid(axi_wvalid),
+            .axi_wvalid(axi_wvalid));
 
-            .completed(is_mem_done),
       
-            .instr_n(instr_mw_out),
-            .result(result_mw_out));
-   
-   // write
+   // write stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                write_enabled;
@@ -226,8 +249,6 @@ module core
    // stage input
    instructions instr_mw_in;   
    reg [31:0]         result_mw_in;
-
-   // there is no stage output
    
    write _write(.clk(clk), 
                 .rstn(rstn && !write_reset),
@@ -243,21 +264,6 @@ module core
 
                 .completed(is_write_done));
    
-
-   wire               are_all_stages_completed = (fetch_reset || is_fetch_done) && (decode_reset || is_decode_done) && (exec_reset || is_exec_done) && (mem_reset || is_mem_done) && (write_reset || is_write_done);
-
-   wire               reg_onestep_forwarding_required = (instr_de_out.uses_reg 
-                                                         && instr_em_out.writes_to_reg
-                                                         && ((instr_de_out.rs1 != 0 && instr_de_out.rs1 == instr_em_out.rd)
-                                                             || (instr_de_out.rs2 != 0 && instr_de_out.rs2 == instr_em_out.rd))) ;   
-   
-   wire               reg_twostep_forwarding_required = (instr_de_out.uses_reg 
-                                                         && instr_mw_out.writes_to_reg
-                                                         && ((instr_de_out.rs1 != 0 && instr_de_out.rs1 == instr_mw_out.rd)
-                                                             || (instr_de_out.rs2 != 0 && instr_de_out.rs2 == instr_mw_out.rd))) ;   
-   
-
-   (* mark_debug = "true" *) reg [128:0]        total_executed_instrs;
    
    /////////////////////
    // tasks
@@ -265,66 +271,41 @@ module core
    task init;
       begin
          pc <= 0;
-         stalling_for_mem_forwarding <= 0;
          
          fetch_enabled <= 1;      
          decode_enabled <= 0;      
          exec_enabled <= 0;      
          mem_enabled <= 0;      
          write_enabled <= 0;
-
+         
          fetch_reset <= 0;
          decode_reset <= 1;
          exec_reset <= 1;
          mem_reset <= 1;
          write_reset <= 1;
-
-         total_executed_instrs  <= 0;         
-      end
-   endtask; 
-
-   task set_fd;      
-      begin
-         pc_fd_in <= pc_fd_out;
-         instr_fd_in <= instr_fd_out;         
       end
    endtask
 
-   task set_de;      
+   task clear_reset;      
       begin
-         instr_de_in <= instr_de_out;
-         register_de_in.rs1 <= (reg_onestep_forwarding_required 
-                                && is_exec_available 
-                                && instr_em_out.rd == instr_de_out.rs1)? result_em_out:
-                               (reg_twostep_forwarding_required 
-                                && is_mem_available 
-                                && instr_mw_out.rd == instr_de_out.rs1)? result_mw_out:
-                               register_de_out.rs1;
-         register_de_in.rs2 <= (reg_onestep_forwarding_required  
-                                && is_exec_available 
-                                && instr_em_out.rd == instr_de_out.rs2)? result_em_out:
-                               (reg_twostep_forwarding_required 
-                                && is_mem_available 
-                                && instr_mw_out.rd == instr_de_out.rs2)? result_mw_out:
-                               register_de_out.rs2;
+         fetch_reset <= 0;
+         decode_reset <= 0;
+         exec_reset <= 0;
+         mem_reset <= 0;
+         write_reset <= 0;         
+      end
+   endtask
+
+   task clear_enabled;      
+      begin
+         fetch_enabled <= 0;
+         decode_enabled <= 0;
+         exec_enabled <= 0;
+         mem_enabled <= 0;
+         write_enabled <= 0;         
       end
    endtask
    
-   task set_em;      
-      begin
-         instr_em_in <= instr_em_out;
-         register_em_in <= register_em_out;
-         result_em_in <= result_em_out;         
-      end
-   endtask
-   
-   task set_mw;      
-      begin
-         instr_mw_in <= instr_mw_out;
-         result_mw_in <= result_mw_out;         
-      end
-   endtask
-
    /////////////////////
    // main
    /////////////////////   
@@ -334,90 +315,40 @@ module core
 
    always @(posedge clk) begin
       if(rstn) begin
-         if (are_all_stages_completed) begin
-            // Control stalls
-            //////////////////
-
-            if (stalling_for_mem_forwarding) begin               
-               stalling_for_mem_forwarding <= 0;
-
-               pc <= pc + 4;               
-               
-               fetch_enabled <= 1;
-               fetch_reset <= 0;
-               
-               decode_enabled <= 1;
-               decode_reset <= 0;
-               set_fd();
-               
-               exec_enabled <= 1;            
-               exec_reset <= 0;
-               set_de();            
-            end else if (instr_em_out.is_load && onestep_forwarding_required && is_exec_available) begin
-               // case 00
-               stalling_for_mem_forwarding <= 1;
-               
-               fetch_enabled <= 0;
-               fetch_reset <= 0; // this result will be used in next round
-               
-               decode_enabled <= 1;
-               decode_reset <= 0;
-               // no set_fd();
-               
-               exec_enabled <= 0;               
-               exec_reset <= 1; // this result won't be used in the future anymore.
-               // no set_de(); because decode stage should be done once more before set_de
-            end else if (is_jump_chosen_em_out && is_exec_available) begin
-               // TODO: change here to handle only if it fails to predict jump destination
-               pc <= jump_dest_em_out;
-               
-               fetch_enabled <= 1;
-               fetch_reset <= 0;
-               
-               decode_enabled <= 0;
-               decode_reset <= 1;
-               // no set_fd();
-               
-               exec_enabled <= 0;               
-               exec_reset <= 1;
-               // no set_de(); because there's no need to move
+         if (is_fetch_done) begin
+            pc_fd_in <= pc_fd_out;
+            instr_fd_in <= instr_fd_out;
+            fetch_reset <= 1;
+            decode_enabled <= 1;            
+         end else if (is_decode_done) begin
+            instr_de_in <= instr_de_out;
+            register_de_in <= register_de_out;
+            decode_reset <= 1;
+            exec_enabled <= 1;            
+         end else if (is_exec_done) begin            
+            instr_em_in <= instr_em_out;
+            register_em_in <= register_em_out;
+            result_em_in <= result_em_out;
+            if (is_jump_chosen_em_out) begin
+               pc <= jump_dest_em_out;               
             end else begin
-               // TODO: set pc what branch predictor says
-               pc <= pc + 4;               
-               
-               fetch_enabled <= 1;
-               fetch_reset <= 0;
-               
-               decode_enabled <= is_fetch_done;
-               decode_reset <= !is_fetch_done;
-               set_fd();              
-               
-               exec_enabled <= is_decode_done;
-               exec_reset <= !is_decode_done;
-               set_de();
+               pc <= pc + 4;                           
             end
-            
-            mem_enabled <= is_exec_available;            
-            mem_reset <= !is_exec_available;
-            set_em();              
-            
-            write_enabled <= is_mem_done;
-            write_reset <= !is_mem_done;
-            set_mw();
-
-            if(is_write_done && !write_reset) begin
-               total_executed_instrs <= total_executed_instrs + 1;               
-            end      
-            
-            total_executed_instrs <=  total_executed_instrs + 1;     
+            is_exec_reset <= 1;
+            mem_enabled <= 1;            
+         end else if (is_mem_done) begin
+            instr_mw_in <= instr_mw_out;
+            result_mw_in <= result_mw_out;
+            mem_reset <= 1;
+            write_enabled <= 1;            
+         end else if (is_write_done) begin
+            write_reset <= 1;
+            fetch_enabled <= 1;            
          end else begin
-            fetch_enabled <= 0;
-            decode_enabled <= 0;
-            exec_enabled <= 0;
-            mem_enabled <= 0;
-            write_enabled <= 0;
-         end
-      end else begin // if (rstn)
+            clear_enable();            
+            clear_reset();            
+         end         
+      end else begin
          init();
       end
    end
