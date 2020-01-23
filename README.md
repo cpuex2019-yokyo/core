@@ -1,3 +1,3 @@
-# Core
+# RISV-V implementation (rv32imasu) by Verilog
 
-やっていく
+Not implemented yet.
