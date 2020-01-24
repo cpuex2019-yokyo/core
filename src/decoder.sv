@@ -52,10 +52,9 @@ module decoder
    wire              j_type = (opcode == 7'b1101111 // jal
                                );
 
-   // j and u do not require rs1
-   assign rs1 = (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;
-   // j, u, and i do not require rs2
-   assign rs2 = (r_type || s_type || b_type) ? _rs2 : 5'b00000;
+   // ok?
+   assign rs1 = _rs1;   
+   assign rs2 = _rs2;   
 
    wire              _lui = (opcode == 7'b0110111);
    wire              _auipc =  (opcode == 7'b0010111);
@@ -118,17 +117,17 @@ module decoder
    /////////
    // rv32a
    /////////
-   wire              _lr = (opcode == 7'b010111) && (funct3 == 3'b010) && (_rs2 == 5'b00000) && (funct7[6:2] == 5'b00000);
-   wire              _sc = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00011);
-   wire              _amoswap = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00001);
-   wire              _amoadd = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00000);
-   wire              _amoxor = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00100);
-   wire              _amoand = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01100);
-   wire              _amoor = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01000);
-   wire              _amomin = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10000);
-   wire              _amomax = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10100);
-   wire              _amominu = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11000);
-   wire              _amomaxu = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11100);
+   wire              _lr = (opcode == 7'b0101111) && (funct3 == 3'b010) && (_rs2 == 5'b00000) && (funct7[6:2] == 5'b00010);
+   wire              _sc = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00011);
+   wire              _amoswap = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00001);
+   wire              _amoadd = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00000);
+   wire              _amoxor = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00100);
+   wire              _amoand = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01100);
+   wire              _amoor = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01000);
+   wire              _amomin = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10000);
+   wire              _amomax = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10100);
+   wire              _amominu = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11000);
+   wire              _amomaxu = (opcode == 7'b0101111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11100);
 
    /////////
    // rv32s
@@ -170,8 +169,7 @@ module decoder
                                || _amomin
                                || _amomax
                                || _amominu
-                               || _amomaxu);
-   
+                               || _amomaxu);   
 
    wire              _rv32s = (_csrrw
                                || _csrrs
