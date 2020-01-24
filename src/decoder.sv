@@ -176,10 +176,11 @@ module decoder
             instr.i_or <= _or;
             instr.i_and <= _and;
 
+            // other
             instr.fence <= _fence;
             instr.fence_i <= _fencei;
             instr.ecall <= _ecall;
-            instr.ebreak <= _ebreak;            
+            instr.ebreak <= _ebreak;
 
             /////////
             // rv32m

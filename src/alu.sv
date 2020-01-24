@@ -60,6 +60,10 @@ module alu
                      instr.sra? $signed(register.rs1) >>> register.rs2[4:0]:
                      instr.i_or? register.rs1 | register.rs2:
                      instr.i_and? register.rs1 & register.rs2:
+                     instr.fence? 32'b0:
+                     instr.fencei? 32'b0:
+                     instr.ecall? 32'b0:
+                     instr.ebreak? 32'b0:
                      ///// rv32m /////
                      // seems to be buggy; not fully tested yet.
                      instr.mul? mul_temp[31:0]:
@@ -69,8 +73,8 @@ module alu
                      instr.div? $signed(register.rs1) / $signed(register.rs2):
                      instr.divu? register.rs1 / register.rs2:
                      instr.rem? $signed(register.rs1) % $signed(register.rs2):
-                     instr.remu? register.rs1 % register.rs2:
-                     31'b0;
+                     instr.remu? register.rs1 % register.rs2:                     
+                     32'b0;
 
    always @(posedge clk) begin
       if (rstn) begin
