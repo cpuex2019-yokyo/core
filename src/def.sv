@@ -71,6 +71,12 @@ typedef struct {
    reg         fence_i;
    reg         ecall;
    reg         ebreak;
+   reg         csrrw;
+   reg         csrrs;
+   reg         csrrc;
+   reg         csrrwi;
+   reg         csrrsi;
+   reg         csrrci;
 
    /////////
    // rv32m
@@ -102,19 +108,16 @@ typedef struct {
    /////////
    // rv32s
    /////////
-   reg         csrrw;
-   reg         csrrs;
-   reg         csrrc;
-   reg         csrrwi;
-   reg         csrrsi;
-   reg         csrrci;
-   
+   reg         sret;
+   reg         mret;
+   reg         wfi;
+   reg         sfence_vma;   
 
    /////////
    // other controls
    /////////
    reg         rv32a;
-   reg         rv32s;         
+   reg         csrop;         
    reg         writes_to_reg;
    reg         is_store;
    reg         is_load;

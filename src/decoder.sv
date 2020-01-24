@@ -34,6 +34,7 @@ module decoder
    // r, i, s, b, u, j
    wire              r_type = (opcode == 7'b0110011  // arith
                                || opcode == 7'b0101111 // amo*
+                               || opcode == 7'b1110011 // super
                                );   
    wire              i_type = (opcode == 7'b1100111 // jalr
                                || opcode == 7'b0000011 // loads
@@ -101,6 +102,12 @@ module decoder
    wire              _fencei =  (opcode == 7'b0001111) && (funct3 == 3'b001) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
    wire              _ecall = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000000);
    wire              _ebreak = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000001);
+   wire              _csrrw = (opcode == 7'b1110011) && (funct3 == 3'b001);
+   wire              _csrrs = (opcode == 7'b1110011) && (funct3 == 3'b010);
+   wire              _csrrc = (opcode == 7'b1110011) && (funct3 == 3'b011);
+   wire              _csrrwi = (opcode == 7'b1110011) && (funct3 == 3'b101);
+   wire              _csrrsi = (opcode == 7'b1110011) && (funct3 == 3'b110);
+   wire              _csrrci = (opcode == 7'b1110011) && (funct3 == 3'b111);
 
    /////////
    // rv32m
@@ -132,12 +139,11 @@ module decoder
    /////////
    // rv32s
    /////////
-   wire              _csrrw = (opcode == 7'b1110011) && (funct3 == 3'b001);
-   wire              _csrrs = (opcode == 7'b1110011) && (funct3 == 3'b010);
-   wire              _csrrc = (opcode == 7'b1110011) && (funct3 == 3'b011);
-   wire              _csrrwi = (opcode == 7'b1110011) && (funct3 == 3'b101);
-   wire              _csrrsi = (opcode == 7'b1110011) && (funct3 == 3'b110);
-   wire              _csrrci = (opcode == 7'b1110011) && (funct3 == 3'b111);
+   wire              _sret = (opcode == 7'b1110011) && (funct3 == 3'b000) && (funct7 == 7'b0001000) && (_rs1 == 5'b00000) && (_rs2 == 5'b00010);
+   wire              _mret = (opcode == 7'b1110011) && (funct3 == 3'b000) && (funct7 == 7'b0011000) && (_rs1 == 5'b00000) && (_rs2 == 5'b00010);
+   wire              _wfi = (opcode == 7'b1110011) && (funct3 == 3'b000) && (funct7 == 7'b0001000) && (_rs1 == 5'b00000) && (_rs2 == 5'b00101);
+   wire              _sfence_vma = (opcode == 7'b1110011) && (funct3 == 3'b000) && (funct7 == 7'b0001001);
+   
    
 
    /////////
@@ -171,7 +177,7 @@ module decoder
                                || _amominu
                                || _amomaxu);   
 
-   wire              _rv32s = (_csrrw
+   wire              _csrop = (_csrrw
                                || _csrrs
                                || _csrrc
                                || _csrrwi
@@ -237,6 +243,12 @@ module decoder
             instr.fence_i <= _fencei;
             instr.ecall <= _ecall;
             instr.ebreak <= _ebreak;
+            instr.csrrw <= _csrrw;
+            instr.csrrs <= _csrrs;
+            instr.csrrc <= _csrrc;
+            instr.csrrwi <= _csrrwi;
+            instr.csrrsi <= _csrrsi;
+            instr.csrrci <= _csrrci;            
 
             /////////
             // rv32m
@@ -266,28 +278,26 @@ module decoder
             instr.amomaxu <= _amomaxu;            
 
             /////////
-            // rv32s
+            // rv32s            
             /////////
-            instr.csrrw <= _csrrw;
-            instr.csrrs <= _csrrs;
-            instr.csrrc <= _csrrc;
-            instr.csrrwi <= _csrrwi;
-            instr.csrrsi <= _csrrsi;
-            instr.csrrci <= _csrrci;            
+            instr.sret <= _sret;
+            instr.mret <= _mret;
+            instr.wfi <= _wfi;
+            instr.sfence_vma <= _sfence_vma;                      
 
             /////////
             // other controls
             /////////
-            instr.rv32s <= _rv32s;
+            instr.csrop <= _csrop;
             instr.rv32a <= _rv32a;
             
             instr.writes_to_reg <= !(_is_conditional_jump
                                      || _is_store
-                                     || _rv32s
+                                     || _csrop
                                      || _fence
                                      || _fencei
                                      || _ecall
-                                     || _ebreak);
+                                     || _ebreak);            
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
