@@ -65,8 +65,11 @@ typedef struct {
    reg         sra;
    reg         i_or;
    reg         i_and;
-
-   // TODO
+   // other
+   reg         fence;
+   reg         fence_i;
+   reg         ecall;
+   reg         ebreak;
 
    /////////
    // rv32m
@@ -83,12 +86,28 @@ typedef struct {
    /////////
    // rv32a
    /////////
-   // TODO
-
+   // reg         lr;
+   // reg         sc;
+   // reg         amoswap;
+   // reg         amoadd;
+   // reg         amoxor;
+   // reg         amoand;
+   // reg         amoor;
+   // reg         amomin;
+   // reg         amomax;
+   // reg         amominu;
+   // reg         amomaxu;   
+   
    /////////
    // rv32s
    /////////
-   // TODO
+   // reg         csrrw;
+   // reg         csrrs;
+   // reg csrrc;
+   // reg csrrwi;
+   // reg csrrsi;
+   // reg csrrci;
+   
 
    /////////
    // other controls

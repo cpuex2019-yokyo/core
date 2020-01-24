@@ -84,6 +84,14 @@ module decoder
    wire              _or =  (opcode == 7'b0110011) && (funct3 == 3'b110) && (funct7 == 7'b0000000);
    wire              _and = (opcode == 7'b0110011) && (funct3 == 3'b111) && (funct7 == 7'b0000000);
 
+   // other
+   wire              _fence =  (opcode == 7'b0001111) && (funct3 == 3'b000) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
+   wire              _fencei =  (opcode == 7'b0001111) && (funct3 == 3'b001) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
+   wire              _ecall = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000000);
+   wire              _ebreak = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000001);
+   
+   
+
    /////////
    // rv32m
    /////////
@@ -168,7 +176,10 @@ module decoder
             instr.i_or <= _or;
             instr.i_and <= _and;
 
-            // TODO
+            instr.fence <= _fence;
+            instr.fence_i <= _fencei;
+            instr.ecall <= _ecall;
+            instr.ebreak <= _ebreak;            
 
             /////////
             // rv32m
