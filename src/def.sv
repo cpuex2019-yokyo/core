@@ -86,27 +86,27 @@ typedef struct {
    /////////
    // rv32a
    /////////
-   // reg         lr;
-   // reg         sc;
-   // reg         amoswap;
-   // reg         amoadd;
-   // reg         amoxor;
-   // reg         amoand;
-   // reg         amoor;
-   // reg         amomin;
-   // reg         amomax;
-   // reg         amominu;
-   // reg         amomaxu;   
+   reg         lr;
+   reg         sc;
+   reg         amoswap;
+   reg         amoadd;
+   reg         amoxor;
+   reg         amoand;
+   reg         amoor;
+   reg         amomin;
+   reg         amomax;
+   reg         amominu;
+   reg         amomaxu;   
    
    /////////
    // rv32s
    /////////
-   // reg         csrrw;
-   // reg         csrrs;
-   // reg csrrc;
-   // reg csrrwi;
-   // reg csrrsi;
-   // reg csrrci;
+   reg         csrrw;
+   reg         csrrs;
+   reg         csrrc;
+   reg         csrrwi;
+   reg         csrrsi;
+   reg         csrrci;
    
 
    /////////

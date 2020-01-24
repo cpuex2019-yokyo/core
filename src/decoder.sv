@@ -89,8 +89,6 @@ module decoder
    wire              _fencei =  (opcode == 7'b0001111) && (funct3 == 3'b001) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
    wire              _ecall = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000000);
    wire              _ebreak = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000001);
-   
-   
 
    /////////
    // rv32m
@@ -104,6 +102,35 @@ module decoder
    wire              _rem = (opcode == 7'b0110011) && (funct3 == 3'b110) && (funct7 == 7'b0000001);
    wire              _remu = (opcode == 7'b0110011) && (funct3 == 3'b111) && (funct7 == 7'b0000001);
 
+   /////////
+   // rv32a
+   /////////
+   wire              _lr = (opcode == 7'b010111) && (funct3 == 3'b010) && (_rs2 == 5'b00000) && (funct7[6:2] == 5'b00000);
+   wire              _sc = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00011);
+   wire              _amoswap = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00001);
+   wire              _amoadd = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00000);
+   wire              _amoxor = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b00100);
+   wire              _amoand = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01100);
+   wire              _amoor = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b01000);
+   wire              _amomin = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10000);
+   wire              _amomax = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b10100);
+   wire              _amominu = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11000);
+   wire              _amomaxu = (opcode == 7'b010111) && (funct3 == 3'b010) && (funct7[6:2] == 5'b11100);
+
+   /////////
+   // rv32s
+   /////////
+   wire              _csrrw = (opcode == 7'b1110011) && (funct3 == 3'b001);
+   wire              _csrrs = (opcode == 7'b1110011) && (funct3 == 3'b010);
+   wire              _csrrc = (opcode == 7'b1110011) && (funct3 == 3'b011);
+   wire              _csrrwi = (opcode == 7'b1110011) && (funct3 == 3'b101);
+   wire              _csrrsi = (opcode == 7'b1110011) && (funct3 == 3'b110);
+   wire              _csrrci = (opcode == 7'b1110011) && (funct3 == 3'b111);
+     
+
+   /////////
+   // other controls
+   /////////
    wire              _is_store = (_sb
                                   || _sh
                                   || _sw);
@@ -120,6 +147,14 @@ module decoder
                                              || _bge
                                              || _bltu
                                              || _bgeu);
+
+   wire _rv32s = (_csrrw
+                  || _csrrs
+                  || _csrrc
+                  || _csrrwi
+                  || _csrrsi
+                  || _csrrci);
+   
 
 
    always @(posedge clk) begin
@@ -197,18 +232,38 @@ module decoder
             /////////
             // rv32a
             /////////
-            // TODO
+            instr.lr <= _lr;
+            instr.sc <= _sc;
+            instr.amoswap <= _amoswap;
+            instr.amoadd <= _amoadd;
+            instr.amoxor <= _amoxor;
+            instr.amoand <= _amoand;
+            instr.amoor <= _amoor;
+            instr.amomin <= _amomin;
+            instr.amomax <= _amomax;
+            instr.amominu <= _amominu;
+            instr.amomaxu <= _amomaxu;            
 
             /////////
             // rv32s
             /////////
-            // TODO
+            instr.csrrw <= _csrrw;
+            instr.csrrs <= _csrrs;
+            instr.csrrc <= _csrrc;
+            instr.csrrwi <= _csrrwi;
+            instr.csrrsi <= _csrrsi;
+            instr.csrrci <= _csrrci;            
 
             /////////
             // other controls
             /////////
             instr.writes_to_reg <= !(_is_conditional_jump
-                                     || _is_store);
+                                     || _is_store
+                                     || _rv32s
+                                     || _fence
+                                     || _fencei
+                                     || _ecall
+                                     || _ebreak);
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
