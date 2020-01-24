@@ -2,45 +2,48 @@
 `include "def.sv"
 
 module fetch
-       (input wire         clk,
-        input wire        rstn,
+  (input wire         clk,
+   input wire        rstn,
 
-        // control flags
-        input wire        enabled,
-        output reg        completed,
+   // control flags
+   input wire        enabled,
+   output reg        completed,
 
-        // bus
-        output reg        request_enable,
-        output            memreq request,
-        input wire        response_enable,
-        input             memresp response,
+   // bus
+   output reg        request_enable,
+   output reg        mode,
+   output reg [31:0] addr,
+   output reg [31:0] wdata,
+   output reg [3:0]  wstrb, 
+   input wire        response_enable,
+   input [31:0]      data,
 
-        // input
-        input wire [31:0] pc,
+   // input
+   input wire [31:0] pc,
 
-        // output
-        output reg [31:0] pc_n,
-        output reg [31:0] instr_raw);
+   // output
+   output reg [31:0] pc_n,
+   output reg [31:0] instr_raw);
 
 
-localparam WAITING_REQUEST = 0;
-localparam WAITING_DONE = 1;
-reg               state;
+   localparam WAITING_REQUEST = 0;
+   localparam WAITING_DONE = 1;
+   reg               state;
 
-task init;
-    begin
-        completed <= 0;
-        state <= WAITING_REQUEST;
-    end
-endtask
+   task init;
+      begin
+         completed <= 0;
+         state <= WAITING_REQUEST;
+      end
+   endtask
 
-initial begin
-    init();
-end
+   initial begin
+      init();
+   end
 
-always @(posedge clk) begin
-    if(rstn) begin
-        if (state == WAITING_REQUEST && enabled) begin
+   always @(posedge clk) begin
+      if(rstn) begin
+         if (state == WAITING_REQUEST && enabled) begin
             completed <= 0;
 
             state <= WAITING_DONE;
@@ -48,17 +51,17 @@ always @(posedge clk) begin
             request.addr <= pc;
             request_enable <= 1;
             pc_n <= pc;
-        end else if (state == WAITING_DONE && response_enable) begin
+         end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
 
             state <= WAITING_REQUEST;
             instr_raw <= response.data;
-        end else begin
+         end else begin
             completed <= 0;
-        end
-    end else begin
-        init();
-    end
-end
+         end
+      end else begin
+         init();
+      end
+   end
 endmodule
 `default_nettype wire
