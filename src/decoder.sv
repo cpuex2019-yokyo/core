@@ -24,7 +24,7 @@ module decoder
 
    // basic component
    // the location of immediate value may change
-   wire [6:0]        funct7 = instr_raw[31:25];
+   wire [6:0]        _funct7 = instr_raw[31:25];
    wire [4:0]        _rs2 = instr_raw[24:20];
    wire [4:0]        _rs1 = instr_raw[19:15];
    wire [2:0]        funct3 = instr_raw[14:12];
@@ -32,12 +32,25 @@ module decoder
    wire [6:0]        opcode = instr_raw[6:0];
 
    // r, i, s, b, u, j
-   wire              r_type = (opcode == 7'b0110011 | opcode == 7'b1010011);
-   wire              i_type = (opcode == 7'b1100111 | opcode == 7'b0000011 | opcode == 7'b0010011 | opcode == 7'b0000111);
-   wire              s_type = (opcode == 7'b0100011 | opcode == 7'b0100111);
-   wire              b_type = (opcode == 7'b1100011);
-   wire              u_type = (opcode == 7'b0110111 | opcode == 7'b0010111);
-   wire              j_type = (opcode == 7'b1101111);
+   wire              r_type = (opcode == 7'b0110011  // arith
+                               || opcode == 7'b0101111 // amo*
+                               );   
+   wire              i_type = (opcode == 7'b1100111 // jalr
+                               || opcode == 7'b0000011 // loads
+                               || opcode == 7'b0010011 // arith immediate
+                               || opcode == 7'b0000111 // ?
+                               || opcode == 7'b1110011 // ecall, ebreak, csr*
+                               || opcode == 7'b0001111 // fence
+                               );
+   wire              s_type = (opcode == 7'b0100011 // stores
+                               );
+   wire              b_type = (opcode == 7'b1100011 // conditional branches
+                               );
+   wire              u_type = (opcode == 7'b0110111 // lui
+                               || opcode == 7'b0010111 // auipc
+                               );
+   wire              j_type = (opcode == 7'b1101111 // jal
+                               );
 
    // j and u do not require rs1
    assign rs1 = (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;
@@ -126,7 +139,7 @@ module decoder
    wire              _csrrwi = (opcode == 7'b1110011) && (funct3 == 3'b101);
    wire              _csrrsi = (opcode == 7'b1110011) && (funct3 == 3'b110);
    wire              _csrrci = (opcode == 7'b1110011) && (funct3 == 3'b111);
-     
+   
 
    /////////
    // other controls
@@ -148,15 +161,25 @@ module decoder
                                              || _bltu
                                              || _bgeu);
 
-   wire _rv32s = (_csrrw
-                  || _csrrs
-                  || _csrrc
-                  || _csrrwi
-                  || _csrrsi
-                  || _csrrci);
+   wire              _rv32a = (_sc
+                               || _amoswap
+                               || _amoadd
+                               || _amoxor
+                               || _amoand
+                               || _amoor
+                               || _amomin
+                               || _amomax
+                               || _amominu
+                               || _amomaxu);
    
 
-
+   wire              _rv32s = (_csrrw
+                               || _csrrs
+                               || _csrrc
+                               || _csrrwi
+                               || _csrrsi
+                               || _csrrci);
+   
    always @(posedge clk) begin
       if (rstn) begin
          if (enabled) begin
@@ -257,6 +280,9 @@ module decoder
             /////////
             // other controls
             /////////
+            instr.rv32s <= _rv32s;
+            instr.rv32a <= _rv32a;
+            
             instr.writes_to_reg <= !(_is_conditional_jump
                                      || _is_store
                                      || _rv32s
@@ -267,12 +293,16 @@ module decoder
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
-            instr.is_conditional_jump <=  _is_conditional_jump;
+            instr.is_conditional_jump <= _is_conditional_jump;
 
+            /////////
+            // operands
+            /////////            
             instr.rd <= (r_type || i_type || u_type || j_type) ? _rd : 5'b00000;
             instr.rs1 <= (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;
             instr.rs2 <= (r_type || s_type || b_type) ? _rs2 : 5'b00000;
-
+            instr.funct7 <= _funct7;
+            
             instr.pc <= pc;
 
             instr.imm <= i_type ? (instr_raw[31] ? {~20'b0, instr_raw[31:20]}:

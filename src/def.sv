@@ -17,6 +17,7 @@ typedef struct {
    reg [4:0]   rs1;
    reg [4:0]   rs2;
    reg [31:0]  imm;
+   reg [6:0]   funct7;
    reg [31:0]  pc;
 
    /////////
@@ -112,8 +113,9 @@ typedef struct {
    /////////
    // other controls
    /////////
+   reg         rv32a;
+   reg         rv32s;         
    reg         writes_to_reg;
-
    reg         is_store;
    reg         is_load;
    reg         is_conditional_jump;
