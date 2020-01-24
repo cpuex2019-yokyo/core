@@ -6,7 +6,6 @@ module mmu(
            input wire        rstn,
 
            input wire        fetch_request_enable,
-           input             fetch_request,
            input wire        freq_mode,
            input wire [31:0] freq_addr,
            input wire [31:0] freq_wdata,
@@ -16,7 +15,6 @@ module mmu(
 
 
            input wire        mem_request_enable,
-           input             mem_request,
            input wire        mreq_mode,
            input wire [31:0] mreq_addr,
            input wire [31:0] mreq_wdata,

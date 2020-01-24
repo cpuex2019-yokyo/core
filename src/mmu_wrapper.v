@@ -1,12 +1,10 @@
 `default_nettype none
-`include "def.sv"
 
 module mmu_wrapper (
                     input wire         clk,
                     input wire         rstn,
 
                     input wire         fetch_request_enable,
-                    input              fetch_request,
                     input wire         freq_mode,
                     input wire [31:0]  freq_addr,
                     input wire [31:0]  freq_wdata,
@@ -16,7 +14,6 @@ module mmu_wrapper (
 
 
                     input wire         mem_request_enable,
-                    input              mem_request,
                     input wire         mreq_mode,
                     input wire [31:0]  mreq_addr,
                     input wire [31:0]  mreq_wdata,
@@ -56,7 +53,7 @@ module mmu_wrapper (
    mmu _mmu(.clk(clk), .rstn(rstn),
       
             .fetch_request_enable(fetch_request_enable),
-            .freq_fode(freq_fode),
+            .freq_fode(freq_mode),
             .freq_addr(freq_addr),
             .freq_wdata(freq_wdata),
             .freq_wstrb(freq_wstrb),

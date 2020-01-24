@@ -174,7 +174,7 @@ module core
 
             .instr(instr_em_in),
             .register(register_em_in),
-            .addr(result_em_in),
+            .target_addr(result_em_in),
             .instr_n(instr_mw_out),
             .result(result_mw_out));
 

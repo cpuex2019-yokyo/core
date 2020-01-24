@@ -16,7 +16,7 @@ module fetch
    output reg [31:0] wdata,
    output reg [3:0]  wstrb, 
    input wire        response_enable,
-   input [31:0]      data,
+   input wire [31:0]      data,
 
    // input
    input wire [31:0] pc,
@@ -47,15 +47,15 @@ module fetch
             completed <= 0;
 
             state <= WAITING_DONE;
-            request.mode <= MEMREQ_READ;
-            request.addr <= pc;
+            mode <= MEMREQ_READ;
+            addr <= pc;
             request_enable <= 1;
             pc_n <= pc;
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
 
             state <= WAITING_REQUEST;
-            instr_raw <= response.data;
+            instr_raw <= data;
          end else begin
             completed <= 0;
          end

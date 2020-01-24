@@ -1,5 +1,4 @@
 `default_nettype none
-`include "def.sv"
 
 module core_wrapper
   (input wire clk,
@@ -26,7 +25,7 @@ module core_wrapper
               .rstn(rstn),
 
               .fetch_request_enable(fetch_request_enable),
-              .freq_fode(freq_fode),
+              .freq_mode(freq_mode),
               .freq_addr(freq_addr),
               .freq_wdata(freq_wdata),
               .freq_wstrb(freq_wstrb),
