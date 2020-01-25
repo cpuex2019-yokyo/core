@@ -62,14 +62,14 @@ module alu
                      instr.i_and? register.rs1 & register.rs2:
                      instr.fence? 32'b0: // NOTE: fence is nop in this implementation
                      instr.fencei? 32'b0: // NOTE: fencei is nop in this implementation
-                     instr.ecall? 32'b0:
-                     instr.ebreak? 32'b0:
-                     instr.csrrw? 32'b0:
-                     instr.csrrs? 32'b0:
-                     instr.csrrc? 32'b0:
-                     instr.csrrwi? 32'b0:
-                     instr.csrrsi? 32'b0:
-                     instr.csrrci? 32'b0:
+                     instr.ecall? 32'b0: // will be handed in core.sv
+                     instr.ebreak? 32'b0: // will be handed in core.sv
+                     instr.csrrw? 32'b0: // will be handed in core.sv
+                     instr.csrrs? 32'b0: // will be handed in core.sv
+                     instr.csrrc? 32'b0: // will be handed in core.sv
+                     instr.csrrwi? 32'b0: // will be handed in core.sv
+                     instr.csrrsi? 32'b0: // will be handed in core.sv
+                     instr.csrrci? 32'b0: // will be handed in core.sv
                      ///// rv32m /////
                      // TODO: seems to be buggy; not fully tested yet.
                      instr.mul? mul_temp[31:0]:
@@ -81,17 +81,17 @@ module alu
                      instr.rem? $signed(register.rs1) % $signed(register.rs2):
                      instr.remu? register.rs1 % register.rs2:                 
                      ///// rv32m /////
-                     instr.amoswap: 32'b0:
-                     instr.amoand: 32'b0:
-                     instr.amoor: 32'b0:
-                     instr.amoxor: 32'b0:
-                     instr.amomax: 32'b0:
-                     instr.amomin: 32'b0:
-                     instr.amomaxu: 32'b0:
-                     instr.amominu: 32'b0:
+                     instr.amoswap: 32'b0: // will be handed in core.sv
+                     instr.amoand: 32'b0: // will be handed in core.sv
+                     instr.amoor: 32'b0: // will be handed in core.sv
+                     instr.amoxor: 32'b0: // will be handed in core.sv
+                     instr.amomax: 32'b0: // will be handed in core.sv
+                     instr.amomin: 32'b0: // will be handed in core.sv
+                     instr.amomaxu: 32'b0: // will be handed in core.sv
+                     instr.amominu: 32'b0: // will be handed in core.sv
                      ///// rv32s /////
-                     instr.sret? 32'b0:
-                     instr.mret? 32'b0:
+                     instr.sret? 32'b0: // will be handed in core.sv
+                     instr.mret? 32'b0: // will be handed in core.sv
                      instr.wfi? 32'b0: // NOTE: wfi is nop in this implementation
                      instr.sfence_vma? 32'b0: // NOTE: sfence_vma is nop in this implementation
                      32'b0;

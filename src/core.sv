@@ -1,38 +1,42 @@
-`default_nettype none
+j`default_nettype none
 `include "def.sv"
 
-module core
-  (input wire clk,
-   input wire         rstn,
+  module core
+    (input wire clk,
+     input wire         rstn,
 
-   // bus
-   output wire        fetch_request_enable,
-   output wire        freq_mode,
-   output wire [31:0] freq_addr,
-   output wire [31:0] freq_wdata
-   output wire [3:0]  freq_wstrb,
-   input wire         fetch_response_enable,
-   input wire [31:0]  fresp_data,
+     // bus
+     output wire        fetch_request_enable,
+     output wire        freq_mode,
+     output wire [31:0] freq_addr,
+     output wire [31:0] freq_wdata
+     output wire [3:0]  freq_wstrb,
+     input wire         fetch_response_enable,
+     input wire [31:0]  fresp_data,
 
 
-   output wire        mem_request_enable,
-   output wire        mreq_mode,
-   output wire [31:0] mreq_addr,
-   output wire [31:0] mreq_wdata,
-   output wire [3:0]  mreq_wstrb,
-   input wire         mem_response_enable,
-   input wire [31:0]  mresp_data,
+     output wire        mem_request_enable,
+     output wire        mreq_mode,
+     output wire [31:0] mreq_addr,
+     output wire [31:0] mreq_wdata,
+     output wire [3:0]  mreq_wstrb,
+     input wire         mem_response_enable,
+     input wire [31:0]  mresp_data,
 
-   input wire         software_intr,
-   input wire         timer_intr,
-   input wire         ext_intr
-   );
+     // from PLIC
+     input wire         ext_intr,
+
+     // from CLINT
+     input wire         software_intr,
+     input wire         timer_intr,
+     input wire [63:0]  _time_full
+     );
 
    // registers
    /////////
-   wire [4:0]         reg_w_dest;
-   wire [31:0]        reg_w_data;
-   wire               reg_w_enable;
+   wire [4:0]           reg_w_dest;
+   wire [31:0]          reg_w_data;
+   wire                 reg_w_enable;
    registers _registers(.clk(clk),
                         .rstn(rstn),
                         .r_enabled(decode_enabled),
@@ -45,17 +49,17 @@ module core
                         .w_data(reg_w_data),
 
                         .register(register_d_out));
-
+   
    // csrs
    /////////
-   wire [31:0]        _misa = {2'b01, 4'b0, 26'b00000101000001000100000001};   
-   wire [31:0]        _mvendorid = 32'b0;
-   wire [31:0]        _marchid = 32'b0;
-   wire [31:0]        _mimpid = 32'b0;
-   wire [31:0]        _mhartid = 32'b0;
+   wire [31:0]          _misa = {2'b01, 4'b0, 26'b00000101000001000100000001};   
+   wire [31:0]          _mvendorid = 32'b0;
+   wire [31:0]          _marchid = 32'b0;
+   wire [31:0]          _mimpid = 32'b0;
+   wire [31:0]          _mhartid = 32'b0;
 
-   reg [31:0]         _mstatus;
-   wire [31:0]        _mstatus_mask = 32'h601e79aa;   
+   reg [31:0]           _mstatus;
+   wire [31:0]          _mstatus_mask = 32'h601e79aa;   
    task write_mstatus (input wire [31:0] value);
       begin
          _mstatus <= (_mstatus & ~(mstatus_mask)) | (val * _mstatus_mask);         
@@ -111,10 +115,6 @@ module core
    wire [31:0]        _minstret = _minstret_full[31:0];   
    wire [31:0]        _minstreth = _minstret_full[63:32];
    
-   wire [31:0]        _mhpmcounter3 = 32'b0;
-   wire [31:0]        _mhpmcounter3h = 32'b0;
-   wire [31:0]        _mhpmevent3 = 32'b0;
-   
    reg [31:0]         _mcounteren;
    task write_mcounteren (input wire [31:0] value);
       begin
@@ -150,16 +150,16 @@ module core
       end
    endtask
    
-   reg [8 * 16:0]       _pmpcfg;
-   function [31:0] read_pmpcfg (input [31:0] value, input [3:0] idx);
-      begin
-         if(value & 1 == 0) begin
-            _pmpcfg[idx+:32];            
-         end else begin
-            32'b0;            
-         end
-      end
-   endtask 
+   reg [8 * 16 - 1:0]       _pmpcfg;
+   // function [31:0] read_pmpcfg (input [31:0] value, input [3:0] idx);
+   //    begin
+   //       if(value & 1 == 0) begin
+   //          read_pmpcfg = _pmpcfg[idx+:32];            
+   //       end else begin
+   //          read_pmpcfg = 32'b0;            
+   //       end
+   //    end
+   // endtask 
    task write_pmpcfg (input [31:0] value, input [3:0] idx);
       begin
          if (value & 1 == 0) begin
@@ -266,12 +266,10 @@ module core
    wire [31:0]         _cycleh = _mcycleh;
    wire [31:0]         _instret = _minstret;
    wire [31:0]         _instreth = _minstreth;
-   wire [31:0]         _hpmcounter3 = 32'b0;   
-   wire [31:0]         _hpmcounter3h = 32'b0;
 
-   // access to those regs is same as load of mtime
-   reg [31:0]          _time;
-   reg [31:0]          _timeh;
+   // _time_full is given as a wire from CLINT
+   wire [31:0]         _time = _time_full[31:0];
+   wire [31:0]         _timeh = _time_full[63:32];
    
    // internal state
    /////////
@@ -322,9 +320,12 @@ module core
    // stage outputs
    instructions instr_d_out;
    regvpair register_d_out;
+   wire                 is_csr_valid_d_out;
+   wire [31:0]          csr_value_d_out;
+   assign {is_csr_valid_d_out, csr_value_d_out} = read_csr(instr_d_out.imm[11:0])
 
-   wire [4:0]          rs1_a;
-   wire [4:0]          rs2_a;
+     wire [4:0]          rs1_a;
+   wire [4:0]            rs2_a;
    decoder _decoder(.clk(clk),
                     .rstn(rstn),
 
@@ -347,6 +348,8 @@ module core
    // stage input
    (* mark_debug = "true" *) instructions instr_e_in;
    (* mark_debug = "true" *) regvpair register_e_in;
+   reg                   is_csr_valid_e_in;
+   reg                   csr_valud_e_in;   
 
    // stage outputs
    instructions instr_e_out;
@@ -379,11 +382,11 @@ module core
    // stage inputs
    instructions instr_m_in;
    regvpair register_m_in;
-   reg [31:0]          arg_m_in;
+   reg [31:0]            arg_m_in;
 
    // stage outputs
    instructions instr_m_out;
-   wire [31:0]         result_m_out;
+   wire [31:0]           result_m_out;
 
    mem _mem(.clk(clk),
             .rstn(rstn),
@@ -413,7 +416,7 @@ module core
 
    // stage input
    instructions instr_w_in;
-   reg [31:0]          result_w_in;
+   reg [31:0]            result_w_in;
 
    write _write(.clk(clk),
                 .rstn(rstn),
@@ -544,7 +547,191 @@ module core
             write_sepc(value);
          end            
       end
+   endtask // set_epc
+
+   // here we assume that this function will used in the decode phase
+   function read_csr(input [11:0] addr) begin
+      begin
+        if ((instr_e_in.csrrw && instr_d_out.rd != 0)
+            || (instr_e_in.csrrs)
+            || (instr_e_in.csrrc)
+            || (instr_e_in.csrrwi && instr_d_out.rd != 0)
+            || (instr_e_in.csrrsi)
+            || (instr_e_in.csrrci)) begin
+         case (addr) 
+           12'hc00: read_csr = {1'b1, _cycle};
+           12'hc01: read_csr = {1'b1, _time};
+           12'hc02: read_csr = {1'b1, _instret};
+           12'hc81: read_csr = {1'b1, _timeh};
+           12'hc82: read_csr = {1'b1, _instreth};
+           // hpmcounterN
+           // hpmcounterNh
+           12'h100: read_csr = {1'b1, _sstatus};
+           12'h102: read_csr = {1'b1, _sedeleg};
+           12'h103: read_csr = {1'b1, _sideleg};
+           12'h104: read_csr = {1'b1, _sie};
+           12'h105: read_csr = {1'b1, _stvec};
+           12'h106: read_csr = {1'b1, _scounteren};
+           12'h140: read_csr = {1'b1, _sscratch};
+           12'h141: read_csr = {1'b1, _sepc};
+           12'h142: read_csr = {1'b1, _scause};
+           12'h143: read_csr = {1'b1, _stval};
+           12'h144: read_csr = {1'b1, _sip};
+           12'h180: read_csr = {1'b1, _satp};            
+           12'h300: read_csr = {1'b1, _mstatus};            
+           12'h301: read_csr = {1'b1, _misa};
+           12'h302: read_csr = {1'b1, _medeleg};
+           12'h303: read_csr = {1'b1, _mideleg};
+           12'h304: read_csr = {1'b1, _mie};
+           12'h305: read_csr = {1'b1, _mtvec};
+           12'h306: read_csr = {1'b1, _mcounteren};
+           12'h340: read_csr = {1'b1, _mscratch};
+           12'h341: read_csr = {1'b1, _mepc};
+           12'h342: read_csr = {1'b1, _mcause};
+           12'h343: read_csr = {1'b1, _mtval};                       
+           12'h344: read_csr = {1'b1, _mip};
+           12'h3a0: read_csr = {1'b1, _pmpcfg[127:96]};
+           12'h3a1: read_csr = {1'b1, _pmpcfg[95:64]};
+           12'h3a2: read_csr = {1'b1, _pmpcfg[63:32]};
+           12'h3a3: read_csr = {1'b1, _pmpcfg[31:0]};
+           12'h3b0: read_csr = {1'b1, _pmpaddr[0]};
+           12'h3b1: read_csr = {1'b1, _pmpaddr[1]};
+           12'h3b2: read_csr = {1'b1, _pmpaddr[2]};
+           12'h3b3: read_csr = {1'b1, _pmpaddr[3]};
+           12'h3b4: read_csr = {1'b1, _pmpaddr[4]};
+           12'h3b5: read_csr = {1'b1, _pmpaddr[5]};
+           12'h3b6: read_csr = {1'b1, _pmpaddr[6]};
+           12'h3b7: read_csr = {1'b1, _pmpaddr[7]};
+           12'h3b8: read_csr = {1'b1, _pmpaddr[8]};
+           12'h3b9: read_csr = {1'b1, _pmpaddr[9]};
+           12'h3ba: read_csr = {1'b1, _pmpaddr[10]};
+           12'h3bb: read_csr = {1'b1, _pmpaddr[11]};
+           12'h3bc: read_csr = {1'b1, _pmpaddr[12]};
+           12'h3bd: read_csr = {1'b1, _pmpaddr[13]};
+           12'h3be: read_csr = {1'b1, _pmpaddr[14]};
+           12'h3bf: read_csr = {1'b1, _pmpaddr[15]};            
+           12'hb00: read_csr = {1'b1, _mcycle};
+           12'hb02: read_csr = {1'b1, _minstret};
+           12'hb80: read_csr = {1'b1, _mcycleh};
+           12'hb82: read_csr = {1'b1, _minstreth};
+           // mhpmcounterN
+           // mhpmcounterNh
+           // mhpmevent*
+           default: read_csr = {1'b0, 32'b0};            
+         endcase // case (addr)
+        end else begin
+           read_csr = {1'b1, 32'b0};           
+        end         
+      end
+   endfunction // read_csr
+
+   task invalid_csr_addr(input [11:0] addr);
+      begin
+         status <= FETCH;
+         // TODO
+         // scause
+         //
+      end
    endtask
+
+   // here we assume that this function will be used in the exec phase
+   task write_csr(input [11:0] addr, input[31:0] value) 
+     begin
+        if ((instr_e_in.csrrw)
+            || (instr_e_in.csrrs && instr_e_in.rs1 != 0)
+            || (instr_e_in.csrrc && instr_e_in.rs1 != 0)
+            || (instr_e_in.csrrwi)
+            || (instr_e_in.csrrsi && instr_e_in.rs1 != 0)
+            || (instr_e_in.csrrci && instr_e_in.rs1 != 0)) begin
+           case (addr) 
+             // U mode            
+             // 12'hc00: _cycle;
+             // 12'hc01: _time;
+             // 12'hc02: _instret;
+             // 12'hc81: _timeh;
+             // 12'hc82: _instreth;
+             // hpmcounterN
+             // hpmcounterNh
+
+             // S mode
+             12'h100: write_sstatus(value);
+             12'h102: write_sedeleg(value);
+             12'h103: write_sideleg(value);
+             12'h104: write_sie(value);
+             12'h105: write_stvec(value);
+             12'h106: write_scounteren(value);
+             12'h140: write_sscratch(value);
+             12'h141: write_sepc(value);
+             12'h142: write_scause(value);
+             12'h143: write_stval(value);
+             12'h144: write_sip(value);
+             12'h180: write_satp(value);   
+
+             // M mode
+             12'h300: write_mstatus(value);            
+             // 12'h301: misa
+             12'h302: write_medeleg(value);            
+             12'h303: write_mideleg(value);            
+             12'h304: write_mie(value);            
+             12'h305: write_mtvec(value);            
+             12'h306: write_mcounteren(value);            
+             12'h340: write_mscratch(value);            
+             12'h341: write_mepc(value);            
+             12'h342: write_mcause(value);            
+             12'h343: write_mtval(value);            
+             12'h344: write_mip(value);            
+             12'h3a0: write_pmpcfg(value, 127);            
+             12'h3a1: write_pmpcfg(value, 95);            
+             12'h3a2: write_pmpcfg(value, 64);
+             12'h3a3: write_pmpcfg(value, 31);
+             12'h3b0: write_pmpaddr(value, 0);
+             12'h3b1: write_pmpaddr(value, 1);
+             12'h3b2: write_pmpaddr(value, 2);
+             12'h3b3: write_pmpaddr(value, 3);
+             12'h3b4: write_pmpaddr(value, 4);
+             12'h3b5: write_pmpaddr(value, 5);
+             12'h3b6: write_pmpaddr(value, 6);
+             12'h3b7: write_pmpaddr(value, 7);
+             12'h3b8: write_pmpaddr(value, 8);
+             12'h3b9: write_pmpaddr(value, 9);
+             12'h3ba: write_pmpaddr(value, 10);
+             12'h3bb: write_pmpaddr(value, 11);
+             12'h3bc: write_pmpaddr(value, 12);
+             12'h3bd: write_pmpaddr(value, 13);
+             12'h3be: write_pmpaddr(value, 14);
+             12'h3bf: write_pmpaddr(value, 15);
+             // 12'hb00: _mcycle;
+             // 12'hb02: _minstret;
+             // 12'hb80: _mcycleh;
+             // 12'hb82: _minstreth;
+             // mhpmcounterN
+             // mhpmcounterNh
+             // mhpmevent*
+             default: invalid_csr_addr(addr);            
+           endcase           
+        end // if ((instr_e_in.csrrs))
+     end
+   endtask
+   
+   // here we assume this function is expanded into exec phase
+   function csr_v(input [31:0] original);
+      begin         
+         if (instr_e_in.csrrw) begin
+            csr_v = register_e_in.rs1;            
+         end else if (instr_e_in.csrrs) begin
+            csr_v = original | register_e_in.rs1;
+         end else if (instr_e_in.csrrc) begin
+            csr_v = original | ~(register_e_in.rs1);            
+         end else if (instr_e_in.csrrwi) begin
+            csr_v = {27'b0, instr_e_in.rs1};
+         end else if (instr_e_in.csrrsi) begin
+            csr_v = original | {27'b0, instr_e_in.rs1};
+         end else if (instr_e_in.csrrci) begin
+            csr_v = original | ~({27'b0, instr_e_in.rs1});
+         end
+      end
+   endfunction
+   
 
    /////////////////////
    // main
@@ -553,21 +740,25 @@ module core
       init();
    end
 
-
    always @(posedge clk) begin
       if(rstn) begin
          if (state == INIT) begin
             handle_intr();            
          end if (state == FETCH && is_fetch_done) begin
             state <= DECODE;
-
+            
             // start to decode ... f -> d
             decode_enabled <= 1;
             pc_d_in <= pc_f_out;
             instr_d_in <= instr_f_out;
          end else if (state == DECODE && is_decode_done) begin
             if (instr_d_out.csrop) begin
-               state <= EXEC_PRIV;               
+               state <= EXEC_PRIV;
+               
+               instr_e_in <= instr_d_out;
+               register_e_in <= register_d_out;
+               is_csr_valid_e_in <= is_csr_valid_d_out;
+               csr_value_e_in <= csr_value_d_out;                             
             end else if (instr_d_out.rv32a) begin               
                state <= EXEC_ATOM1;
                // NOTE:
@@ -589,14 +780,17 @@ module core
                register_e_in <= register_d_out;
                exec_enabled <= 1;
             end
-         end else if (state == EXEC_PRIV) begin
-            // TODO
-            if (instr.csrrw) begin               
-            end else if (instr.csrrs) begin
-            end else if (instr.csrrc) begin
-            end else if (instr.csrrwi) begin
-            end else if (instr.csrrsi) begin
-            end else if (instr.csrrci) begin
+         end else if (state == EXEC_PRIV) begin 
+            if (is_csr_valid) begin
+               state <= WRITE;
+               write_csr(instr_e_in.imm[11:0], csr_v(original));
+
+               // start to write ... e -> w
+               write_enabled <= 1;
+               instr_w_in <= instr_e_out;
+               result_w_in <= csr_value_e_in;               
+            end else begin
+               invalid_csr_addr();               
             end
          end else if (state == EXEC_ATOM1 && is_mem_done) begin            
             state <= EXEC_ATOM2;
