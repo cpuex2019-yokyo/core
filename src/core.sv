@@ -21,7 +21,12 @@ module core
    output wire [31:0] mreq_wdata,
    output wire [3:0]  mreq_wstrb,
    input wire         mem_response_enable,
-   input wire [31:0]  mresp_data);
+   input wire [31:0]  mresp_data,
+
+   input wire         software_intr,
+   input wire         timer_intr,
+   input wire         ext_intr
+   );
 
    // registers
    /////////
@@ -39,7 +44,7 @@ module core
                         .w_addr(reg_w_dest),
                         .w_data(reg_w_data),
 
-                        .register(register_de_out));
+                        .register(register_d_out));
 
    // csrs
    /////////
@@ -186,7 +191,7 @@ module core
    task write_sie (input [31:0] value);
       begin
          write_mie((_mie & ~(_mideleg)) | (value & (_mideleg)))
-      end
+           end
    endtask
    
    reg [31:0]       _stvec;
@@ -265,27 +270,28 @@ module core
    wire [31:0]         _hpmcounter3h = 32'b0;
 
    // access to those regs is same as load of mtime
-   reg [31:0]         _time;
-   reg [31:0]         _timeh;
-      
-   // program counter
-   reg [31:0]         pc;
-   enum reg [3:0]     {FETCH, DECODE, EXEC, MEM, WRITE, ATOM1, ATOM2, EXCEPTION} state;
+   reg [31:0]          _time;
+   reg [31:0]          _timeh;
+   
+   // internal state
+   /////////
+   reg [31:0]          pc;
+   enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode;
+   enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, EXCEPTION} state;
    
 
    // fetch stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                fetch_enabled;
-   (* mark_debug = "true" *) reg                fetch_reset;
    (* mark_debug = "true" *) wire               is_fetch_done;
 
    // stage outputs
-   wire [31:0]        pc_fd_out;
-   wire [31:0]        instr_fd_out;
+   wire [31:0]         pc_f_out;
+   wire [31:0]         instr_f_out;
 
    fetch _fetch(.clk(clk),
-                .rstn(rstn && !fetch_reset),
+                .rstn(rstn),
 
                 .enabled(fetch_enabled),
                 .completed(is_fetch_done),
@@ -300,91 +306,87 @@ module core
 
                 .pc(pc),
 
-                .pc_n(pc_fd_out),
-                .instr_raw(instr_fd_out));
+                .pc_n(pc_f_out),
+                .instr_raw(instr_f_out));
 
    // decode stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                decode_enabled;
-   (* mark_debug = "true" *) reg                decode_reset;
    (* mark_debug = "true" *) wire               is_decode_done;
 
    // stage input
-   reg [31:0]         pc_fd_in;
-   reg [31:0]         instr_fd_in;
+   reg [31:0]          pc_d_in;
+   reg [31:0]          instr_d_in;
 
    // stage outputs
-   instructions instr_de_out;
-   regvpair register_de_out;
+   instructions instr_d_out;
+   regvpair register_d_out;
 
-   wire [4:0]         rs1_a;
-   wire [4:0]         rs2_a;
+   wire [4:0]          rs1_a;
+   wire [4:0]          rs2_a;
    decoder _decoder(.clk(clk),
-                    .rstn(rstn && !decode_reset),
+                    .rstn(rstn),
 
                     .enabled(decode_enabled),
                     .completed(is_decode_done),
 
-                    .pc(pc_fd_in),
-                    .instr_raw(instr_fd_in),
+                    .pc(pc_d_in),
+                    .instr_raw(instr_d_in),
 
-                    .instr(instr_de_out),
+                    .instr(instr_d_out),
                     .rs1(rs1_a),
                     .rs2(rs2_a));
 
    // exec stage
    /////////
    // control flags
-  (* mark_debug = "true" *) reg                exec_enabled;
-   (* mark_debug = "true" *) reg                exec_reset;
+   (* mark_debug = "true" *) reg                exec_enabled;
    (* mark_debug = "true" *) wire               is_exec_done;
 
    // stage input
-   (* mark_debug = "true" *) instructions instr_de_in;
-   (* mark_debug = "true" *) regvpair register_de_in;
+   (* mark_debug = "true" *) instructions instr_e_in;
+   (* mark_debug = "true" *) regvpair register_e_in;
 
    // stage outputs
-   instructions instr_em_out;
-   regvpair register_em_out;
-   (* mark_debug = "true" *) wire [31:0]        result_em_out;
-   (* mark_debug = "true" *) wire               is_jump_chosen_em_out;
-   (* mark_debug = "true" *) wire [31:0]        jump_dest_em_out;
+   instructions instr_e_out;
+   regvpair register_e_out;
+   (* mark_debug = "true" *) wire [31:0]        result_e_out;
+   (* mark_debug = "true" *) wire               is_jump_chosen_e_out;
+   (* mark_debug = "true" *) wire [31:0]        jump_dest_e_out;
 
    execute _execute(.clk(clk),
-                    .rstn(rstn && !exec_reset),
+                    .rstn(rstn),
 
                     .enabled(exec_enabled),
                     .completed(is_exec_done),
 
-                    .instr(instr_de_in),
-                    .register(register_de_in),
+                    .instr(instr_e_in),
+                    .register(register_e_in),
 
-                    .instr_n(instr_em_out),
-                    .register_n(register_em_out),
-                    .result(result_em_out),
-                    .is_jump_chosen(is_jump_chosen_em_out),
-                    .jump_dest(jump_dest_em_out));
+                    .instr_n(instr_e_out),
+                    .register_n(register_e_out),
+                    .result(result_e_out),
+                    .is_jump_chosen(is_jump_chosen_e_out),
+                    .jump_dest(jump_dest_e_out));
 
    // mem stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                mem_enabled;
-   (* mark_debug = "true" *) reg                mem_reset;
    (* mark_debug = "true" *) wire               is_mem_done;
-   wire               is_mem_available = is_mem_done && !mem_reset;
 
    // stage inputs
-   instructions instr_em_in;
-   regvpair register_em_in;
-   reg [31:0]         result_em_in;
+   instructions instr_m_in;
+   regvpair register_m_in;
+   reg [31:0]          arg_m_in;
 
    // stage outputs
-   instructions instr_mw_out;
-   wire [31:0]        result_mw_out;
+   instructions instr_m_out;
+   wire [31:0]         result_m_out;
 
    mem _mem(.clk(clk),
-            .rstn(rstn && !mem_reset),
+            .rstn(rstn),
 
             .enabled(mem_enabled),
             .completed(is_mem_done),
@@ -397,29 +399,28 @@ module core
             .response_enable(mem_response_enable),
             .data(mresp_data),
 
-            .instr(instr_em_in),
-            .register(register_em_in),
-            .target_addr(result_em_in),
-            .instr_n(instr_mw_out),
-            .result(result_mw_out));
+            .instr(instr_m_in),
+            .register(register_m_in),
+            .arg(arg_m_in),
+            .instr_n(instr_m_out),
+            .result(result_m_out));
 
    // write stage
    /////////
    // control flags
    (* mark_debug = "true" *) reg                write_enabled;
-   (* mark_debug = "true" *) reg                write_reset;
    (* mark_debug = "true" *) wire               is_write_done;
 
    // stage input
-   instructions instr_mw_in;
-   reg [31:0]         result_mw_in;
+   instructions instr_w_in;
+   reg [31:0]          result_w_in;
 
    write _write(.clk(clk),
-                .rstn(rstn && !write_reset),
+                .rstn(rstn),
 
                 .enabled(write_enabled),
-                .instr(instr_mw_in),
-                .data(result_mw_in),
+                .instr(instr_w_in),
+                .data(result_w_in),
 
                 .reg_w_enable(reg_w_enable),
 
@@ -436,29 +437,13 @@ module core
       begin
          pc <= 0;
 
-         fetch_enabled <= 1;
+         fetch_enabled <= 0;
          decode_enabled <= 0;
          exec_enabled <= 0;
          mem_enabled <= 0;
          write_enabled <= 0;
 
-         fetch_reset <= 0;
-         decode_reset <= 1;
-         exec_reset <= 1;
-         mem_reset <= 1;
-         write_reset <= 1;
-
-         state <= FETCH;         
-      end
-   endtask
-
-   task clear_reset;
-      begin
-         fetch_reset <= 0;
-         decode_reset <= 0;
-         exec_reset <= 0;
-         mem_reset <= 0;
-         write_reset <= 0;
+         state <= INIT;         
       end
    endtask
 
@@ -470,6 +455,95 @@ module core
          mem_enabled <= 0;
          write_enabled <= 0;
       end
+   endtask // clear_enabled
+
+   wire is_interrupted = software_intr || timer_intr || ext_intr;   
+   task handle_intr;
+      begin
+         fetch_enabled <= 1;
+         state <= FETCH;         
+         if (is_interrupted) begin
+            mcause[31] <= 1'b0;
+            if (software_intr) begin
+               mcause[30:0] <= cpu_mode == CPU_M? 3:
+                               cpu_mode == CPU_S? 1:
+                               cpu_mode == CPU_U? 0:
+                               12;               
+            end else if (timer_intr) begin
+               mcause[30:0] <= cpu_mode == CPU_M? 7:
+                               cpu_mode == CPU_S? 5:
+                               cpu_mode == CPU_U? 4:
+                               12;               
+            end else begin
+               mcause[30:0] <= cpu_mode == CPU_M? 11:
+                               cpu_mode == CPU_S? 9:
+                               cpu_mode == CPU_U? 8:
+                               12;               
+            end
+         end
+      end
+   endtask // handle_intr
+
+   task set_pc_after_exec;
+      begin
+         if (instr_e_out.mret) begin
+            if (cpu_mode >= CPU_M) begin
+               pc <= _mepc;
+               // TODO
+               // mstatus.mpp <= priv;
+               // mstatus.mie <= mstatus.mpie;
+               // mstatus.mpie <= 1;
+               // mstatus.mpp <= 0;
+            end else begin
+               // TODO: no priv
+            end
+         end else if (instr_e_out.sret) begin
+            if (cpu_mode >= CPU_S) begin
+               pc <= _sepc;
+               // TODO
+               // mstatus.spp <= priv;
+               // mstatus.sie <= mstatus.spie;
+               // mstatus.spie <= 1;
+               // mstatus.spp <= 0;
+            end else begin
+               // TODO: no priv
+            end
+         end else if (is_jump_chosen_e_out) begin
+            pc <= jump_dest_e_out;
+         end else begin
+            pc <= pc + 4;
+         end
+      end
+   endtask 
+
+   task set_cause(input [1:0] next_cpu_mode, input [31:0] value);
+      begin
+         if (next_cpu_mode == CPU_M) begin
+            write_mcause(value);
+         end  else if (next_cpu_mode == CPU_S) begin
+            write_scause(value);
+         end            
+      end
+   endtask
+   
+   task set_tval(input [1:0] next_cpu_mode, input [31:0] value);
+      begin
+         if (next_cpu_mode == CPU_M) begin
+            write_mtval(value);
+         end  else if (next_cpu_mode == CPU_S) begin
+            write_stval(value);
+         end            
+      end
+   endtask
+
+   task set_epc(input [31:0] value);
+      begin
+         if (cpu_mode == CPU_M) begin
+            write_mepc(value);
+         end else if (cpu_mode == CPU_S) begin
+            write_sepc(value);
+         end            
+      end
    endtask
 
    /////////////////////
@@ -479,45 +553,119 @@ module core
       init();
    end
 
+
    always @(posedge clk) begin
       if(rstn) begin
-         if (is_fetch_done) begin
-            pc_fd_in <= pc_fd_out;
-            instr_fd_in <= instr_fd_out;
-            fetch_reset <= 1;
+         if (state == INIT) begin
+            handle_intr();            
+         end if (state == FETCH && is_fetch_done) begin
+            state <= DECODE;
+
+            // start to decode ... f -> d
             decode_enabled <= 1;
-            state <= DECODE;            
-         end else if (is_decode_done) begin
-            instr_de_in <= instr_de_out;
-            register_de_in <= register_de_out;
-            decode_reset <= 1;
-            exec_enabled <= 1;
-            state <= EXEC;            
-         end else if (is_exec_done) begin
-            instr_em_in <= instr_em_out;
-            register_em_in <= register_em_out;
-            result_em_in <= result_em_out;
-            if (is_jump_chosen_em_out) begin
-               pc <= jump_dest_em_out;
+            pc_d_in <= pc_f_out;
+            instr_d_in <= instr_f_out;
+         end else if (state == DECODE && is_decode_done) begin
+            if (instr_d_out.csrop) begin
+               state <= EXEC_PRIV;               
+            end else if (instr_d_out.rv32a) begin               
+               state <= EXEC_ATOM1;
+               // NOTE:
+               // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
+               // lw rd, (rs1)
+               // op tmp, rs2, rd
+               // sw tmp, (rs1)
+               
+               // start to load (rs1) ... d -> m
+               mem_enabled <= 1;
+               instr_m_in <= instr_d_out;
+               register_m_in <= register_d_out;               
+               arg_m_in <= register_d_out.rs1; // load addr: rs1
             end else begin
-               pc <= pc + 4;
+               state <= EXEC;
+
+               // start to execute ... d -> e
+               instr_e_in <= instr_d_out;
+               register_e_in <= register_d_out;
+               exec_enabled <= 1;
             end
-            exec_reset <= 1;
-            mem_enabled <= 1;
-            state <= MEM;            
-         end else if (is_mem_done) begin
-            instr_mw_in <= instr_mw_out;
-            result_mw_in <= result_mw_out;
-            mem_reset <= 1;
+         end else if (state == EXEC_PRIV) begin
+            // TODO
+            if (instr.csrrw) begin               
+            end else if (instr.csrrs) begin
+            end else if (instr.csrrc) begin
+            end else if (instr.csrrwi) begin
+            end else if (instr.csrrsi) begin
+            end else if (instr.csrrci) begin
+            end
+         end else if (state == EXEC_ATOM1 && is_mem_done) begin            
+            state <= EXEC_ATOM2;
+            
+            // prepare to write ... m -> w
+            // here we do not enable write yet
+            instr_w_in <= instr_m_out;
+            result_w_in <= result_m_out;
+
+            // start to store ... m -> (binop)-> m
+            // op tmp, rs2, rd -> sw tmp, (rs1)
+            mem_enabled <= 1;            
+            instr_m_in <= instr_m_out;            
+            register_m_in <= register_m_out;            
+            arg_m_in <= instr_m_out.amoswap? register_m_out.rs2:
+                        instr_m_out.amoadd? result_m_out + register_m_out.rs2:
+                        instr_m_out.amoand? result_m_out & register_m_out.rs2:
+                        instr_m_out.amoor? result_m_out | register_m_out.rs2:
+                        instr_m_out.amoxor? result_m_out ^ register_m_out.rs2:
+                        instr_m_out.amomax? ($signed(result_m_out) > $signed(register_m_out.rs2)? result_m_out:
+                                             register_m_out.rs2):
+                        instr_m_out.amomin? ($signed(result_m_out) > $signed(register_m_out.rs2)? register_m_out.rs2:
+                                             result_m_out):
+                        instr_m_out.amomaxu? (result_m_out > register_m_out.rs2? result_m_out:
+                                              register_m_out):
+                        instr_m_out.amominu? (result_m_out > register_m_out.rs2? register_m_out.rs2:
+                                              result_m_out):
+                        0;
+         end else if (state == EXEC_ATOM2 && is_mem_done) begin
+            state <= WRITE;
+
+            // start to write ... args are prepared when it leaves from EXEC_ATOM1
             write_enabled <= 1;
-            state <= WRITE;            
-         end else if (is_write_done) begin
-            write_reset <= 1;
-            fetch_enabled <= 1;
-            state <= FETCH;            
+         end else if (state == EXEC && is_exec_done) begin
+            state <= MEM;
+
+            // TODO: implement wfi correctly, although the spec says regarding wfi as nop is legal...
+            if (isntr_e_out.ecall || instr_e_out.ebreak) begin
+               set_epc(instr_e_out.pc);               
+               if (instr_e_out.ecall) begin
+                  mcause[30:0] = cpu_mode == CPU_M? 11:
+                                 cpu_mode == CPU_S? 9:
+                                 cpu_mode == CPU_U? 8:
+                                 16;               
+               end else if (instr_e_out.ebreak) begin
+                  mcause[31:0] = 3;               
+               end
+            end
+
+            // start to operate mem ... e -> m
+            mem_enabled <= 1;
+            instr_m_in <= instr_e_out;
+            register_m_in <= register_e_out;
+            arg_m_in <= result_e_out;
+
+            set_pc_after_exec();            
+         end else if (state == MEM && is_mem_done) begin
+            state <= WRITE;
+
+            // start to write ... m -> w
+            write_enabled <= 1;
+            instr_w_in <= instr_m_out;
+            result_w_in <= result_m_out;
+         end else if (state == WRITE && is_write_done) begin
+            // handle interrupts and jump to FETCH stage
+            handle_intr();            
          end else begin
+            // In the next clock after enabling *_enabled, we have to pull down them to zero.
             clear_enabled();
-            clear_reset();
          end
       end else begin
          init();

@@ -60,12 +60,18 @@ module alu
                      instr.sra? $signed(register.rs1) >>> register.rs2[4:0]:
                      instr.i_or? register.rs1 | register.rs2:
                      instr.i_and? register.rs1 & register.rs2:
-                     instr.fence? 32'b0:
-                     instr.fencei? 32'b0:
+                     instr.fence? 32'b0: // NOTE: fence is nop in this implementation
+                     instr.fencei? 32'b0: // NOTE: fencei is nop in this implementation
                      instr.ecall? 32'b0:
                      instr.ebreak? 32'b0:
+                     instr.csrrw? 32'b0:
+                     instr.csrrs? 32'b0:
+                     instr.csrrc? 32'b0:
+                     instr.csrrwi? 32'b0:
+                     instr.csrrsi? 32'b0:
+                     instr.csrrci? 32'b0:
                      ///// rv32m /////
-                     // seems to be buggy; not fully tested yet.
+                     // TODO: seems to be buggy; not fully tested yet.
                      instr.mul? mul_temp[31:0]:
                      instr.mulh? mul_temp[63:32]:
                      instr.mulhsu? mul_temp_hsu[63:32]:
@@ -73,7 +79,21 @@ module alu
                      instr.div? $signed(register.rs1) / $signed(register.rs2):
                      instr.divu? register.rs1 / register.rs2:
                      instr.rem? $signed(register.rs1) % $signed(register.rs2):
-                     instr.remu? register.rs1 % register.rs2:                     
+                     instr.remu? register.rs1 % register.rs2:                 
+                     ///// rv32m /////
+                     instr.amoswap: 32'b0:
+                     instr.amoand: 32'b0:
+                     instr.amoor: 32'b0:
+                     instr.amoxor: 32'b0:
+                     instr.amomax: 32'b0:
+                     instr.amomin: 32'b0:
+                     instr.amomaxu: 32'b0:
+                     instr.amominu: 32'b0:
+                     ///// rv32s /////
+                     instr.sret? 32'b0:
+                     instr.mret? 32'b0:
+                     instr.wfi? 32'b0: // NOTE: wfi is nop in this implementation
+                     instr.sfence_vma? 32'b0: // NOTE: sfence_vma is nop in this implementation
                      32'b0;
 
    always @(posedge clk) begin

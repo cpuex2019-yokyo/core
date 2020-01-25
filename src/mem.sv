@@ -16,12 +16,14 @@ module mem(
            output reg [31:0] wdata,
            output reg [3:0]  wstrb, 
            input wire        response_enable,
-           input wire [31:0]      data,
+           input wire [31:0] data,
 
            // input
            input             instructions instr,
            input             regvpair register,
-           input wire [31:0] target_addr,
+           input wire [31:0] arg,
+           input wire        is_a_read,
+           input wire        is_a_write,
 
            // output
            output            instructions instr_n,
@@ -53,15 +55,26 @@ module mem(
 
                state <= WAITING_DONE;
                mode <= MEMREQ_READ;
-               addr <= {target_addr[31:2], 2'b0};
+               addr <= {arg[31:2], 2'b0};
                request_enable <= 1;
-            end else if (instr.is_store) begin
+            end else if (is_a_read) begin
+               completed <= 0;
+
+               state <= WAITING_DONE;
+               mode <= MEMREQ_READ;
+               addr <= arg;               
+               request_enable <= 1;
+            end else if (instr.is_store || is_a_write) begin
                completed <= 0;
 
                state <= WAITING_DONE;
                mode <= MEMREQ_WRITE;
-               addr <= {target_addr[31:2], 2'b0};
 
+               if (is_a_write) begin
+                  addr <= register.rs1;                  
+               end else begin
+                  addr <= {arg[31:2], 2'b0};
+               end
                if(instr.sb) begin
                   case(addr[1:0])
                     2'b11 : begin
@@ -95,6 +108,9 @@ module mem(
                end  else if (instr.sw) begin
                   request.wstrb <= 4'b1111;
                   request.wdata <= register.rs2;
+               end else if (is_a_write) begin
+                  request.wstrb <= 4'b1111;
+                  request.wdata <= arg;
                end
             end else begin
                completed <= 1;
@@ -132,7 +148,9 @@ module mem(
                  2'b10 : result <= {16'b0, data[31:16]};
                  2'b00 : result <= {16'b0, data[15:0]};
                  default: result <= 32'b0;
-               endcase
+               endcase 
+            end else if (is_a_read) begin
+               result <= data;               
             end else begin
                result <= 32'b0;
             end
