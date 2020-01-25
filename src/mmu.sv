@@ -77,32 +77,32 @@ module mmu(
          if (state == WAITING_REQUEST) begin
             if (fetch_request_enable) begin
                cause <= CAUSE_FETCH;
-               if (fetch_request.mode == MEMREQ_READ) begin
-                  axi_araddr <= fetch_request.addr;
+               if (freq_mode == MEMREQ_READ) begin
+                  axi_araddr <= freq_addr;
                   axi_arprot <= 3'b000;
                   axi_arvalid <= 1;
                   state <= WAITING_MEM_RREADY;
                end else begin
-                  axi_awaddr <= fetch_request.addr;
+                  axi_awaddr <= freq_addr;
                   axi_awprot <= 3'b000;
                   axi_awvalid <= 1;
-                  axi_wstrb <= fetch_request.wstrb;
-                  axi_wdata <= fetch_request.wdata;
+                  axi_wstrb <= freq_wstrb;
+                  axi_wdata <= freq_wdata;
                   state <= WAITING_MEM_RVALID;
                end
             end else if (mem_request_enable) begin
                cause <= CAUSE_MEM;
-               if (mem_request.mode == MEMREQ_READ) begin
-                  axi_araddr <= mem_request.addr;
+               if (memreq_mode == MEMREQ_READ) begin
+                  axi_araddr <= memreq_addr;
                   axi_arprot <= 3'b000;
                   axi_arvalid <= 1;
                   state <= WAITING_MEM_RREADY;
                end else begin
-                  axi_awaddr <= fetch_request.addr;
+                  axi_awaddr <= memreq_addr;
                   axi_awprot <= 3'b000;
                   axi_awvalid <= 1;
-                  axi_wstrb <= fetch_request.wstrb;
-                  axi_wdata <= fetch_request.wdata;
+                  axi_wstrb <= memreq_wstrb;
+                  axi_wdata <= memreq_wdata;
                   state <= WAITING_MEM_RVALID;
                end
             end
@@ -116,10 +116,10 @@ module mmu(
             if (axi_rvalid) begin
                axi_rready <= 0;
                if (cause == CAUSE_FETCH) begin
-                  fetch_response.data <= axi_rdata;
+                  fresp_data <= axi_rdata;
                   fetch_response_enable <= 1;
                end else begin
-                  mem_response.data <= axi_rdata;
+                  memresp_data <= axi_rdata;
                   mem_response_enable <= 1;
                end
             end

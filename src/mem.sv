@@ -106,11 +106,11 @@ module mem(
                     end
                   endcase
                end  else if (instr.sw) begin
-                  request.wstrb <= 4'b1111;
-                  request.wdata <= register.rs2;
+                  wstrb <= 4'b1111;
+                  wdata <= register.rs2;
                end else if (is_a_write) begin
-                  request.wstrb <= 4'b1111;
-                  request.wdata <= arg;
+                  wstrb <= 4'b1111;
+                  wdata <= arg;
                end
             end else begin
                completed <= 1;

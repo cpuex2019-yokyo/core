@@ -53,7 +53,7 @@ module mmu_wrapper (
    mmu _mmu(.clk(clk), .rstn(rstn),
       
             .fetch_request_enable(fetch_request_enable),
-            .freq_fode(freq_mode),
+            .freq_mode(freq_mode),
             .freq_addr(freq_addr),
             .freq_wdata(freq_wdata),
             .freq_wstrb(freq_wstrb),
