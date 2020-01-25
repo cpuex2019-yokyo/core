@@ -408,14 +408,13 @@ module core
    (* mark_debug = "true" *) wire               is_write_done;
 
    // stage input
-   instructions instr_w_in;
    reg [31:0]          data_to_write;
 
    write _write(.clk(clk),
                 .rstn(rstn),
 
                 .enabled(write_enabled),
-                .instr(instr_w_in),
+                .instr(instr),
                 .data(data_to_write),
 
                 .reg_w_enable(reg_w_enable),
