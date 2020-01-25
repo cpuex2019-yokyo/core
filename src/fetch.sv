@@ -21,11 +21,11 @@ module fetch
    // input
    input wire [31:0] pc,
 
-   // output
-   output reg [31:0] pc_n,
+   // outputpc
    output reg [31:0] instr_raw);
 
-
+   assign wdata = 32'b0;
+   
    localparam WAITING_REQUEST = 0;
    localparam WAITING_DONE = 1;
    reg               state;
@@ -50,7 +50,6 @@ module fetch
             mode <= MEMREQ_READ;
             addr <= pc;
             request_enable <= 1;
-            pc_n <= pc;
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
 

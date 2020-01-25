@@ -354,7 +354,7 @@ module core
                     .enabled(exec_enabled),
                     .completed(is_exec_done),
 
-                    .instr(instr_e_in),
+                    .instr(instr),
                     .register(register),
 
                     .result(exec_result),
@@ -513,7 +513,8 @@ module core
       end
    endtask 
 
-   task set_cause(input [1:0] next_cpu_mode, input [31:0] value);
+   wire [1:0] next_cpu_mode; // TODO
+   task set_cause(input [31:0] value);
       begin
          if (next_cpu_mode == CPU_M) begin
             write_mcause(value);
@@ -546,12 +547,12 @@ module core
    // here we assume that this function will used in the decode phase
    function read_csr(input [11:0] addr);
       begin
-         if ((instr_e_in.csrrw && instr_d_out.rd != 0)
-             || (instr_e_in.csrrs)
-             || (instr_e_in.csrrc)
-             || (instr_e_in.csrrwi && instr_d_out.rd != 0)
-             || (instr_e_in.csrrsi)
-             || (instr_e_in.csrrci)) begin
+         if ((instr.csrrw && instr.rd != 0)
+             || (instr.csrrs)
+             || (instr.csrrc)
+             || (instr.csrrwi && instr.rd != 0)
+             || (instr.csrrsi)
+             || (instr.csrrci)) begin
             case (addr) 
               12'hc00: read_csr = {1'b1, _cycle};
               12'hc01: read_csr = {1'b1, _time};
@@ -727,16 +728,10 @@ module core
    endfunction
 
 
-   wire [30:0] ecall_vector =  cpu_mode == CPU_M? 11:
-               cpu_mode == CPU_S? 9:
-               cpu_mode == CPU_U? 8:
-               16;
-
-   task ecall;
-      begin
-         ; // TODO: set {1'b1, ecall_vector}
-      end
-   endtask  
+   wire [30:0] ecall_vector = {1'b1, cpu_mode == CPU_M? 31'd11:
+               cpu_mode == CPU_S? 31'd9:
+               cpu_mode == CPU_U? 31'd8:
+               31'd16};  
    
 
    /////////////////////
@@ -825,8 +820,8 @@ module core
                state <= WRITE;
                set_epc(instr.pc);               
                if (instr.ecall) begin
-                  ecall();               
-               end else if (instr_e_out.ebreak) begin
+                  set_cause(ecall_vector);               
+               end else if (instr.ebreak) begin
                   set_cause(3);               
                end
             end else begin
