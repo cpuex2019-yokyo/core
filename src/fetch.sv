@@ -16,7 +16,7 @@ module fetch
    output reg [31:0] wdata,
    output reg [3:0]  wstrb, 
    input wire        response_enable,
-   input wire [31:0]      data,
+   input wire [31:0] data,
 
    // input
    input wire [31:0] pc,

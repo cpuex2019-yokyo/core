@@ -729,9 +729,9 @@ module core
 
 
    wire [30:0] ecall_vector = {1'b1, cpu_mode == CPU_M? 31'd11:
-               cpu_mode == CPU_S? 31'd9:
-               cpu_mode == CPU_U? 31'd8:
-               31'd16};  
+                               cpu_mode == CPU_S? 31'd9:
+                               cpu_mode == CPU_U? 31'd8:
+                               31'd16};  
    
 
    /////////////////////
