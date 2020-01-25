@@ -26,7 +26,6 @@ module mem(
            input wire        is_a_write,
 
            // output
-           output            instructions instr_n,
            output reg [31:0] result);
 
 
@@ -48,7 +47,6 @@ module mem(
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && enabled) begin
-            instr_n <= instr;
 
             if (instr.is_load) begin
                completed <= 0;
@@ -119,7 +117,7 @@ module mem(
             completed <= 1;
             state <= WAITING_REQUEST;
 
-            if (instr_n.lb) begin
+            if (instr.lb) begin
                case(addr[1:0])
                  2'b11: result <= {{24{data[31]}}, data[31:24]};
                  2'b10: result <= {{24{data[23]}}, data[23:16]};
@@ -127,15 +125,15 @@ module mem(
                  2'b00: result <= {{24{data[7]}}, data[7:0]};
                  default: result <= 32'b0;
                endcase
-            end else if (instr_n.lh) begin
+            end else if (instr.lh) begin
                case(addr[1:0])
                  2'b10 : result <= {{16{data[31]}}, data[31:16]};
                  2'b00 : result <= {{16{data[15]}}, data[15:0]};
                  default: result <=  32'b0;
                endcase
-            end else if (instr_n.lw) begin
+            end else if (instr.lw) begin
                result <= data;
-            end else if (instr_n.lbu) begin
+            end else if (instr.lbu) begin
                case(addr[1:0])
                  2'b11: result = {24'b0, data[31:24]};
                  2'b10: result <= {24'b0, data[23:16]};
@@ -143,7 +141,7 @@ module mem(
                  2'b00: result <= {24'b0, data[7:0]};
                  default: result <= 32'b0;
                endcase
-            end else if (instr_n.lhu) begin
+            end else if (instr.lhu) begin
                case(addr[1:0])
                  2'b10 : result <= {16'b0, data[31:16]};
                  2'b00 : result <= {16'b0, data[15:0]};
