@@ -92,17 +92,17 @@ module mmu(
                end
             end else if (mem_request_enable) begin
                cause <= CAUSE_MEM;
-               if (memreq_mode == MEMREQ_READ) begin
-                  axi_araddr <= memreq_addr;
+               if (mreq_mode == MEMREQ_READ) begin
+                  axi_araddr <= mreq_addr;
                   axi_arprot <= 3'b000;
                   axi_arvalid <= 1;
                   state <= WAITING_MEM_RREADY;
                end else begin
-                  axi_awaddr <= memreq_addr;
+                  axi_awaddr <= mreq_addr;
                   axi_awprot <= 3'b000;
                   axi_awvalid <= 1;
-                  axi_wstrb <= memreq_wstrb;
-                  axi_wdata <= memreq_wdata;
+                  axi_wstrb <= mreq_wstrb;
+                  axi_wdata <= mreq_wdata;
                   state <= WAITING_MEM_RVALID;
                end
             end
@@ -119,7 +119,7 @@ module mmu(
                   fresp_data <= axi_rdata;
                   fetch_response_enable <= 1;
                end else begin
-                  memresp_data <= axi_rdata;
+                  mresp_data <= axi_rdata;
                   mem_response_enable <= 1;
                end
             end

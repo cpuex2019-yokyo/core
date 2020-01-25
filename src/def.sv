@@ -68,7 +68,7 @@ typedef struct {
    reg         i_and;
    // other
    reg         fence;
-   reg         fence_i;
+   reg         fencei;
    reg         ecall;
    reg         ebreak;
    reg         csrrw;

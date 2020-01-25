@@ -81,14 +81,14 @@ module alu
                      instr.rem? $signed(register.rs1) % $signed(register.rs2):
                      instr.remu? register.rs1 % register.rs2:                 
                      ///// rv32m /////
-                     instr.amoswap: 32'b0: // will be handed in core.sv
-                     instr.amoand: 32'b0: // will be handed in core.sv
-                     instr.amoor: 32'b0: // will be handed in core.sv
-                     instr.amoxor: 32'b0: // will be handed in core.sv
-                     instr.amomax: 32'b0: // will be handed in core.sv
-                     instr.amomin: 32'b0: // will be handed in core.sv
-                     instr.amomaxu: 32'b0: // will be handed in core.sv
-                     instr.amominu: 32'b0: // will be handed in core.sv
+                     instr.amoswap? 32'b0: // will be handed in core.sv
+                     instr.amoand? 32'b0: // will be handed in core.sv
+                     instr.amoor? 32'b0: // will be handed in core.sv
+                     instr.amoxor? 32'b0: // will be handed in core.sv
+                     instr.amomax? 32'b0: // will be handed in core.sv
+                     instr.amomin? 32'b0: // will be handed in core.sv
+                     instr.amomaxu? 32'b0: // will be handed in core.sv
+                     instr.amominu? 32'b0: // will be handed in core.sv
                      ///// rv32s /////
                      instr.sret? 32'b0: // will be handed in core.sv
                      instr.mret? 32'b0: // will be handed in core.sv

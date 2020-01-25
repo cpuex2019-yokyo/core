@@ -24,7 +24,7 @@ module decoder
 
    // basic component
    // the location of immediate value may change
-   wire [6:0]        _funct7 = instr_raw[31:25];
+   wire [6:0]        funct7 = instr_raw[31:25];
    wire [4:0]        _rs2 = instr_raw[24:20];
    wire [4:0]        _rs1 = instr_raw[19:15];
    wire [2:0]        funct3 = instr_raw[14:12];
@@ -98,10 +98,10 @@ module decoder
    wire              _and = (opcode == 7'b0110011) && (funct3 == 3'b111) && (funct7 == 7'b0000000);
 
    // other
-   wire              _fence =  (opcode == 7'b0001111) && (funct3 == 3'b000) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
-   wire              _fencei =  (opcode == 7'b0001111) && (funct3 == 3'b001) && (_rd == 5'b00000) && (_rs1 == 5'v00000);
-   wire              _ecall = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000000);
-   wire              _ebreak = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'v00000) && (_rs1 == 5'v00000) && (instr_raw[31:20] == 12'b000000000001);
+   wire              _fence =  (opcode == 7'b0001111) && (funct3 == 3'b000) && (_rd == 5'b00000) && (_rs1 == 5'b00000);
+   wire              _fencei =  (opcode == 7'b0001111) && (funct3 == 3'b001) && (_rd == 5'b00000) && (_rs1 == 5'b00000);
+   wire              _ecall = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'b00000) && (_rs1 == 5'b00000) && (instr_raw[31:20] == 12'b000000000000);
+   wire              _ebreak = (opcode == 7'b1110011) && (funct3 == 3'b000) && (_rd == 5'b00000) && (_rs1 == 5'b00000) && (instr_raw[31:20] == 12'b000000000001);
    wire              _csrrw = (opcode == 7'b1110011) && (funct3 == 3'b001);
    wire              _csrrs = (opcode == 7'b1110011) && (funct3 == 3'b010);
    wire              _csrrc = (opcode == 7'b1110011) && (funct3 == 3'b011);
@@ -240,7 +240,7 @@ module decoder
 
             // other
             instr.fence <= _fence;
-            instr.fence_i <= _fencei;
+            instr.fencei <= _fencei;
             instr.ecall <= _ecall;
             instr.ebreak <= _ebreak;
             instr.csrrw <= _csrrw;
@@ -309,7 +309,7 @@ module decoder
             instr.rd <= (r_type || i_type || u_type || j_type) ? _rd : 5'b00000;
             instr.rs1 <= (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;
             instr.rs2 <= (r_type || s_type || b_type) ? _rs2 : 5'b00000;
-            instr.funct7 <= _funct7;
+            instr.funct7 <= funct7;
             
             instr.pc <= pc;
 

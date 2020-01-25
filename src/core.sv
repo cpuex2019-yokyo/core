@@ -1,4 +1,4 @@
-j`default_nettype none
+`default_nettype none
 `include "def.sv"
 
   module core
@@ -9,7 +9,7 @@ j`default_nettype none
      output wire        fetch_request_enable,
      output wire        freq_mode,
      output wire [31:0] freq_addr,
-     output wire [31:0] freq_wdata
+     output wire [31:0] freq_wdata,
      output wire [3:0]  freq_wstrb,
      input wire         fetch_response_enable,
      input wire [31:0]  fresp_data,
@@ -29,7 +29,7 @@ j`default_nettype none
      // from CLINT
      input wire         software_intr,
      input wire         timer_intr,
-     input wire [63:0]  _time_full
+     input wire [63:0]  time_full
      );
 
    // registers
@@ -60,15 +60,15 @@ j`default_nettype none
 
    reg [31:0]           _mstatus;
    wire [31:0]          _mstatus_mask = 32'h601e79aa;   
-   task write_mstatus (input wire [31:0] value);
+   task write_mstatus (input [31:0] value);
       begin
-         _mstatus <= (_mstatus & ~(mstatus_mask)) | (val * _mstatus_mask);         
+         _mstatus <= (_mstatus & ~(_mstatus_mask)) | (value * _mstatus_mask);         
       end
    endtask
    
    reg [31:0]         _medeleg;
    wire [31:0]        delegable_excps = 32'hbfff;   
-   task write_medeleg (input wire [31:0] value);
+   task write_medeleg (input [31:0] value);
       begin
          _medeleg <= (_medeleg & ~delegable_excps) | (value & delegable_excps);         
       end
@@ -76,14 +76,14 @@ j`default_nettype none
    
    reg [31:0]         _mideleg;
    wire [31:0]        delegable_ints = 32'h222;   
-   task write_mideleg (input wire [31:0] value);
+   task write_mideleg (input [31:0] value);
       begin
          _mideleg <= (_mideleg & delegable_ints) | (value & delegable_ints);         
       end
    endtask
    
    reg [31:0]         _mip;
-   task write_mip (input wire [31:0] value);
+   task write_mip (input [31:0] value);
       begin
          // TODO
       end
@@ -92,14 +92,14 @@ j`default_nettype none
    
    reg [31:0]         _mie;
    wire [31:0]        all_ints = 32'haaa;   
-   task write_mie (input wire [31:0] value);
+   task write_mie (input [31:0] value);
       begin
          _mie <= (_mie & all_ints) | (value & all_ints);         
       end
    endtask
    
    reg [31:0]         _mtvec;
-   task write_mtvec (input wire [31:0] value);
+   task write_mtvec (input [31:0] value);
       begin
          if (value & 3 < 2) begin
             _mtvec <= value;            
@@ -116,35 +116,35 @@ j`default_nettype none
    wire [31:0]        _minstreth = _minstret_full[63:32];
    
    reg [31:0]         _mcounteren;
-   task write_mcounteren (input wire [31:0] value);
+   task write_mcounteren (input [31:0] value);
       begin
          _mcounteren <= value;         
       end
    endtask
    
    reg [31:0]         _mscratch;
-   task write_mscratch (input wire [31:0] value);
+   task write_mscratch (input [31:0] value);
       begin
          _mscratch <= value;         
       end
    endtask
    
    reg [31:0]         _mepc;
-   task write_mepc (input wire [31:0] value);
+   task write_mepc (input [31:0] value);
       begin
          _mepc <= value;         
       end
    endtask
    
    reg [31:0]         _mcause;
-   task write_mcause (input wire [31:0] value);
+   task write_mcause (input [31:0] value);
       begin
          _mcause <= value;         
       end
    endtask
    
    reg [31:0]         _mtval;
-   task write_mtval (input wire [31:0] value);
+   task write_mtval (input [31:0] value);
       begin
          _mtval <= value;         
       end
@@ -168,16 +168,16 @@ j`default_nettype none
       end
    endtask 
    
-   reg [31:0]       _pmaddr[0:15];
-   task write_pmaddr (input [31:0] value, input [3:0] idx);
+   reg [31:0]       _pmpaddr[0:15];
+   task write_pmpaddr (input [31:0] value, input [3:0] idx);
       begin
          // TODO: lock check
-         _pmaddr[idx] = value;         
+         _pmpaddr[idx] = value;         
       end
    endtask
    
    
-   wire [31:0]       sstatus_v1_10_mask = 32'h0x800de133;   
+   wire [31:0]       sstatus_v1_10_mask = 32'h800de133;   
    wire [31:0]       _sstatus = _mstatus & sstatus_v1_10_mask;
    task write_sstatus (input [31:0] value);
       begin
@@ -185,13 +185,13 @@ j`default_nettype none
       end
    endtask
    
-   reg [31:0]       _sedeleg;
-   reg [31:0]       _sideleg;
+  // reg [31:0]       _sedeleg;
+   //reg [31:0]       _sideleg;
    reg [31:0]       _sie = _mie & _mideleg;
    task write_sie (input [31:0] value);
       begin
-         write_mie((_mie & ~(_mideleg)) | (value & (_mideleg)))
-           end
+         write_mie((_mie & ~(_mideleg)) | (value & (_mideleg)));
+     end
    endtask
    
    reg [31:0]       _stvec;
@@ -218,21 +218,21 @@ j`default_nettype none
    endtask
    
    reg [31:0]         _sepc;
-   task write_sepc (input wire [31:0] value);
+   task write_sepc (input [31:0] value);
       begin
          _sepc <= value;         
       end
    endtask
    
    reg [31:0]         _scause;   
-   task write_scause (input wire [31:0] value);
+   task write_scause (input [31:0] value);
       begin
          _scause <= value;         
       end
    endtask
    
    reg [31:0]         _stval;   
-   task write_stval (input wire [31:0] value);
+   task write_stval (input [31:0] value);
       begin
          _stval <= value;         
       end
@@ -248,9 +248,9 @@ j`default_nettype none
    reg [31:0]         _satp;
    task write_satp (input [31:0] value);
       begin
-         // TODO
+         ;// TODO
       end
-   endtask;   
+   endtask
 
    // for N extension:
    // reg [31:0]         _ustatus;
@@ -268,8 +268,8 @@ j`default_nettype none
    wire [31:0]         _instreth = _minstreth;
 
    // _time_full is given as a wire from CLINT
-   wire [31:0]         _time = _time_full[31:0];
-   wire [31:0]         _timeh = _time_full[63:32];
+   wire [31:0]         _time = time_full[31:0];
+   wire [31:0]         _timeh = time_full[63:32];
    
    // internal state
    /////////
@@ -322,9 +322,9 @@ j`default_nettype none
    regvpair register_d_out;
    wire                 is_csr_valid_d_out;
    wire [31:0]          csr_value_d_out;
-   assign {is_csr_valid_d_out, csr_value_d_out} = read_csr(instr_d_out.imm[11:0])
+   assign {is_csr_valid_d_out, csr_value_d_out} = read_csr(instr_d_out.imm[11:0]);
 
-     wire [4:0]          rs1_a;
+   wire [4:0]          rs1_a;
    wire [4:0]            rs2_a;
    decoder _decoder(.clk(clk),
                     .rstn(rstn),
@@ -349,7 +349,7 @@ j`default_nettype none
    (* mark_debug = "true" *) instructions instr_e_in;
    (* mark_debug = "true" *) regvpair register_e_in;
    reg                   is_csr_valid_e_in;
-   reg                   csr_valud_e_in;   
+   reg  [31:0]             csr_value_e_in;   
 
    // stage outputs
    instructions instr_e_out;
@@ -438,7 +438,7 @@ j`default_nettype none
    /////////////////////
    task init;
       begin
-         pc <= 0;
+         pc <= 32'h80000000;
 
          fetch_enabled <= 0;
          decode_enabled <= 0;
@@ -466,19 +466,20 @@ j`default_nettype none
          fetch_enabled <= 1;
          state <= FETCH;         
          if (is_interrupted) begin
-            mcause[31] <= 1'b0;
+            // TODO: choose mcause or scause appropriately
+            _mcause[31] <= 1'b0;
             if (software_intr) begin
-               mcause[30:0] <= cpu_mode == CPU_M? 3:
+               _mcause[30:0] <= cpu_mode == CPU_M? 3:
                                cpu_mode == CPU_S? 1:
                                cpu_mode == CPU_U? 0:
                                12;               
             end else if (timer_intr) begin
-               mcause[30:0] <= cpu_mode == CPU_M? 7:
+               _mcause[30:0] <= cpu_mode == CPU_M? 7:
                                cpu_mode == CPU_S? 5:
                                cpu_mode == CPU_U? 4:
                                12;               
             end else begin
-               mcause[30:0] <= cpu_mode == CPU_M? 11:
+               _mcause[30:0] <= cpu_mode == CPU_M? 11:
                                cpu_mode == CPU_S? 9:
                                cpu_mode == CPU_U? 8:
                                12;               
@@ -550,7 +551,7 @@ j`default_nettype none
    endtask // set_epc
 
    // here we assume that this function will used in the decode phase
-   function read_csr(input [11:0] addr) begin
+   function read_csr(input [11:0] addr);
       begin
         if ((instr_e_in.csrrw && instr_d_out.rd != 0)
             || (instr_e_in.csrrs)
@@ -567,8 +568,8 @@ j`default_nettype none
            // hpmcounterN
            // hpmcounterNh
            12'h100: read_csr = {1'b1, _sstatus};
-           12'h102: read_csr = {1'b1, _sedeleg};
-           12'h103: read_csr = {1'b1, _sideleg};
+           //12'h102: read_csr = {1'b1, _sedeleg};
+           //12'h103: read_csr = {1'b1, _sideleg};
            12'h104: read_csr = {1'b1, _sie};
            12'h105: read_csr = {1'b1, _stvec};
            12'h106: read_csr = {1'b1, _scounteren};
@@ -627,7 +628,7 @@ j`default_nettype none
 
    task invalid_csr_addr(input [11:0] addr);
       begin
-         status <= FETCH;
+         state <= FETCH;
          // TODO
          // scause
          //
@@ -635,7 +636,7 @@ j`default_nettype none
    endtask
 
    // here we assume that this function will be used in the exec phase
-   task write_csr(input [11:0] addr, input[31:0] value) 
+   task write_csr(input [11:0] addr, input[31:0] value); 
      begin
         if ((instr_e_in.csrrw)
             || (instr_e_in.csrrs && instr_e_in.rs1 != 0)
@@ -655,8 +656,8 @@ j`default_nettype none
 
              // S mode
              12'h100: write_sstatus(value);
-             12'h102: write_sedeleg(value);
-             12'h103: write_sideleg(value);
+             //12'h102: write_sedeleg(value);
+             //12'h103: write_sideleg(value);
              12'h104: write_sie(value);
              12'h105: write_stvec(value);
              12'h106: write_scounteren(value);
@@ -781,16 +782,16 @@ j`default_nettype none
                exec_enabled <= 1;
             end
          end else if (state == EXEC_PRIV) begin 
-            if (is_csr_valid) begin
+            if (is_csr_valid_e_in) begin
                state <= WRITE;
-               write_csr(instr_e_in.imm[11:0], csr_v(original));
+               write_csr(instr_e_in.imm[11:0], csr_v(csr_value_e_in));
 
                // start to write ... e -> w
                write_enabled <= 1;
-               instr_w_in <= instr_e_out;
+               instr_w_in <= instr_e_in;
                result_w_in <= csr_value_e_in;               
             end else begin
-               invalid_csr_addr();               
+               invalid_csr_addr(instr_e_in.imm[11:0]);               
             end
          end else if (state == EXEC_ATOM1 && is_mem_done) begin            
             state <= EXEC_ATOM2;
@@ -804,19 +805,19 @@ j`default_nettype none
             // op tmp, rs2, rd -> sw tmp, (rs1)
             mem_enabled <= 1;            
             instr_m_in <= instr_m_out;            
-            register_m_in <= register_m_out;            
-            arg_m_in <= instr_m_out.amoswap? register_m_out.rs2:
-                        instr_m_out.amoadd? result_m_out + register_m_out.rs2:
-                        instr_m_out.amoand? result_m_out & register_m_out.rs2:
-                        instr_m_out.amoor? result_m_out | register_m_out.rs2:
-                        instr_m_out.amoxor? result_m_out ^ register_m_out.rs2:
-                        instr_m_out.amomax? ($signed(result_m_out) > $signed(register_m_out.rs2)? result_m_out:
-                                             register_m_out.rs2):
-                        instr_m_out.amomin? ($signed(result_m_out) > $signed(register_m_out.rs2)? register_m_out.rs2:
+            //register_m_in <= register_m_in;            
+            arg_m_in <= instr_m_out.amoswap? register_m_in.rs2:
+                        instr_m_out.amoadd? result_m_out + register_m_in.rs2:
+                        instr_m_out.amoand? result_m_out & register_m_in.rs2:
+                        instr_m_out.amoor? result_m_out | register_m_in.rs2:
+                        instr_m_out.amoxor? result_m_out ^ register_m_in.rs2:
+                        instr_m_out.amomax? ($signed(result_m_out) > $signed(register_m_in.rs2)? result_m_out:
+                                             register_m_in.rs2):
+                        instr_m_out.amomin? ($signed(result_m_out) > $signed(register_m_in.rs2)? register_m_in.rs2:
                                              result_m_out):
-                        instr_m_out.amomaxu? (result_m_out > register_m_out.rs2? result_m_out:
-                                              register_m_out):
-                        instr_m_out.amominu? (result_m_out > register_m_out.rs2? register_m_out.rs2:
+                        instr_m_out.amomaxu? (result_m_out > register_m_in.rs2? result_m_out:
+                                              result_m_out):
+                        instr_m_out.amominu? (result_m_out > register_m_in.rs2? register_m_in.rs2:
                                               result_m_out):
                         0;
          end else if (state == EXEC_ATOM2 && is_mem_done) begin
@@ -828,15 +829,15 @@ j`default_nettype none
             state <= MEM;
 
             // TODO: implement wfi correctly, although the spec says regarding wfi as nop is legal...
-            if (isntr_e_out.ecall || instr_e_out.ebreak) begin
+            if (instr_e_out.ecall || instr_e_out.ebreak) begin
                set_epc(instr_e_out.pc);               
                if (instr_e_out.ecall) begin
-                  mcause[30:0] = cpu_mode == CPU_M? 11:
+                  _mcause[30:0] = cpu_mode == CPU_M? 11:
                                  cpu_mode == CPU_S? 9:
                                  cpu_mode == CPU_U? 8:
                                  16;               
                end else if (instr_e_out.ebreak) begin
-                  mcause[31:0] = 3;               
+                  _mcause[31:0] = 3;               
                end
             end
 
