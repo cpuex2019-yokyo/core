@@ -34,16 +34,16 @@ module core
 
    // registers
    /////////
-   wire [4:0]         reg_w_dest;
-   wire [31:0]        reg_w_data;
-   wire               reg_w_enable;
+   (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
+   (* mark_debug = "true" *) wire [31:0]        reg_w_data;
+   (* mark_debug = "true" *) wire               reg_w_enable;
    registers _registers(.clk(clk),
                         .rstn(rstn),
                         .r_enabled(is_fetch_done),
 
                         .rs1(rs1_a),
                         .rs2(rs2_a),
-  
+      
                         .w_enable(reg_w_enable),
                         .w_addr(reg_w_dest),
                         .w_data(reg_w_data),
@@ -149,7 +149,8 @@ module core
          _mtval <= value;         
       end
    endtask
-   
+
+   // TODO: implmenent PMP appropriately   
    reg [8 * 16 - 1:0]       _pmpcfg;
    // function [31:0] read_pmpcfg (input [31:0] value, input [3:0] idx);
    //    begin
@@ -171,7 +172,6 @@ module core
    reg [31:0]       _pmpaddr[0:15];
    task write_pmpaddr (input [31:0] value, input [3:0] idx);
       begin
-         // TODO: lock check
          _pmpaddr[idx] = value;         
       end
    endtask
@@ -273,11 +273,11 @@ module core
    
    // internal state
    /////////
-   reg [31:0]          pc;
-   instructions instr;
-   regvpair register;
-   enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode;
-   enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, EXCEPTION} state;
+   (* mark_debug = "true" *) reg [31:0]          pc;
+   (* mark_debug = "true" *) instructions instr;
+   (* mark_debug = "true" *) regvpair register;
+   (* mark_debug = "true" *) enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode;
+   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, EXCEPTION} state;
 
    // fetch stage
    /////////
@@ -286,7 +286,7 @@ module core
    (* mark_debug = "true" *) wire               is_fetch_done;
 
    // stage outputs
-   wire [31:0]         instr_raw;
+   (* mark_debug = "true" *) wire [31:0]         instr_raw;
 
    fetch _fetch(.clk(clk),
                 .rstn(rstn),
@@ -311,7 +311,7 @@ module core
    (* mark_debug = "true" *) wire               is_decode_done;
 
    // stage input
-    // none
+   // none
 
    // stage outputs
    instructions instr_d_out;
@@ -367,10 +367,10 @@ module core
    (* mark_debug = "true" *) wire               is_mem_done;
 
    // stage inputs
-   reg [31:0]          mem_arg;
+   (* mark_debug = "true" *) reg [31:0]          mem_arg;
 
    // stage outputs
-   wire [31:0]         mem_result;
+   (* mark_debug = "true" *) wire [31:0]         mem_result;
 
    wire                is_a_read = (state == EXEC_ATOM1);
    wire                is_a_write = (state == EXEC_ATOM2);
@@ -427,8 +427,7 @@ module core
    /////////////////////
    task init;
       begin
-         //pc <= 32'h80000000; // initial pos
-         pc <= 32'h00001000;
+         pc <= 32'h00001000; // bootloader
          
          fetch_enabled <= 0;
          exec_enabled <= 0;
@@ -449,7 +448,7 @@ module core
          mem_enabled <= 0;
          write_enabled <= 0;
       end
-   endtask // clear_enabled
+   endtask
 
    wire is_interrupted = software_intr || timer_intr || ext_intr;   
    task handle_intr_and_pc;
@@ -505,16 +504,16 @@ module core
       end
    endtask 
 
-   wire [1:0] next_cpu_mode; // TODO
-   task set_cause(input [31:0] value);
-      begin
-         if (next_cpu_mode == CPU_M) begin
-            write_mcause(value);
-         end  else if (next_cpu_mode == CPU_S) begin
-            write_scause(value);
-         end            
-      end
-   endtask
+   wire [1:0] next_cpu_mode = << next_irq
+              task set_cause(input [31:0] value);
+                 begin
+                    if (next_cpu_mode == CPU_M) begin
+                       write_mcause(value);
+                    end  else if (next_cpu_mode == CPU_S) begin
+                       write_scause(value);
+                    end            
+                 end
+              endtask
    
    task set_tval(input [1:0] next_cpu_mode, input [31:0] value);
       begin
@@ -528,9 +527,9 @@ module core
 
    task set_epc(input [31:0] value);
       begin
-         if (cpu_mode == CPU_M) begin
+         if (next_cpu_mode == CPU_M) begin
             write_mepc(value);
-         end else if (cpu_mode == CPU_S) begin
+         end else if (next_cpu_mode == CPU_S) begin
             write_sepc(value);
          end            
       end
@@ -793,13 +792,13 @@ module core
                        instr.amoor? mem_result | register.rs2:
                        instr.amoxor? mem_result ^ register.rs2:
                        instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
-                                            register.rs2):
+                                      register.rs2):
                        instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
-                                            mem_result):
+                                      mem_result):
                        instr.amomaxu? (mem_result > register.rs2? mem_result:
-                                             mem_result):
+                                       mem_result):
                        instr.amominu? (mem_result > register.rs2? register.rs2:
-                                             mem_result):
+                                       mem_result):
                        0;
          end else if (state == EXEC_ATOM2 && is_mem_done) begin
             state <= WRITE;

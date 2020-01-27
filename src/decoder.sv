@@ -185,9 +185,9 @@ module decoder
                                || _csrrci);
    
    task init;
-       begin
-        completed <= 0;
-       end
+      begin
+         completed <= 0;
+      end
    endtask
    
    always @(posedge clk) begin
@@ -333,6 +333,6 @@ module decoder
       end else begin
          init();
       end
-  end  
+   end  
 endmodule
 `default_nettype wire

@@ -38,48 +38,48 @@ module bram(
 	        input wire        axi_wvalid);
    
 
-   reg [4:0]                  state;
+   (* mark_debug = "true" *) reg [4:0]                  state;
    localparam WAITING_QUERY = 0;
 
    localparam WAITING_MEM1 = 2;
    localparam WAITING_MEM2 = 3;
    localparam WAITING_RREADY = 4;
-  
+   
    localparam WAITING_WROTE = 6;   
    localparam WAITING_BREADY = 7;
 
    assign rsta = !rstn;
    assign clka = clk;   
    
-   wire [31:0] araddr_offset = axi_araddr - 32'h00001000;
-   wire [31:0] awaddr_offset = axi_awaddr - 32'h00001000;
+   wire [31:0]                araddr_offset = axi_araddr - 32'h00001000;
+   wire [31:0]                awaddr_offset = axi_awaddr - 32'h00001000;
    
    task init;
-   begin
+      begin
          state <= WAITING_QUERY;
-      
-      addra <= 0;
-      dina <= 0;
-      ena <= 1;
-      wea <= 0;
-      
-      axi_arready <= 1;
+         
+         addra <= 0;
+         dina <= 0;
+         ena <= 1;
+         wea <= 0;
+         
+         axi_arready <= 1;
 
-      axi_bresp <= 2'b0;            
-      axi_bvalid <= 0;
+         axi_bresp <= 2'b0;            
+         axi_bvalid <= 0;
 
-      axi_rdata <= 32'b0;
-      axi_rresp <= 2'b0;      
-      axi_rvalid <= 0;      
-      
-      axi_awready <= 1;
-      
-      axi_wready <= 1;   
+         axi_rdata <= 32'b0;
+         axi_rresp <= 2'b0;      
+         axi_rvalid <= 0;      
+         
+         axi_awready <= 1;
+         
+         axi_wready <= 1;   
       end
    endtask
 
    initial begin
-    init();      
+      init();      
    end
    
    

@@ -31,7 +31,7 @@ module mem(
 
    localparam WAITING_REQUEST = 0;
    localparam WAITING_DONE = 1;
-   reg                       state;
+   (* mark_debug = "true" *) reg                       state;
 
    task init;
       begin

@@ -53,35 +53,35 @@ module mmu(
 
 
    typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID, WAITING_RECEIVE} memistate_t;
-   memistate_t                 state;
+   (* mark_debug = "true" *) memistate_t                 state;
 
    typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
-   memicause_t cause;
+   (* mark_debug = "true" *) memicause_t cause;
 
    task init;
       begin
-        fetch_response_enable <= 0;
-        fresp_data <= 32'b0;
-        
-        mem_response_enable <= 0;
-        mresp_data <= 32'b0;
-        
-        axi_araddr <= 32'b0;
-        axi_arvalid <= 0;
-        axi_arprot <= 2'b0;
-        
-        axi_bready <= 0;
-        
-        axi_rready <= 0;
-        
-        axi_awaddr <= 32'b0;
-        axi_awvalid <= 0;
-        axi_awprot <= 2'b0;
-        
-        axi_wdata <= 32'b0;
-        axi_wstrb <= 4'b0;
-        axi_wvalid <= 0;
-                 
+         fetch_response_enable <= 0;
+         fresp_data <= 32'b0;
+         
+         mem_response_enable <= 0;
+         mresp_data <= 32'b0;
+         
+         axi_araddr <= 32'b0;
+         axi_arvalid <= 0;
+         axi_arprot <= 2'b0;
+         
+         axi_bready <= 0;
+         
+         axi_rready <= 0;
+         
+         axi_awaddr <= 32'b0;
+         axi_awvalid <= 0;
+         axi_awprot <= 2'b0;
+         
+         axi_wdata <= 32'b0;
+         axi_wstrb <= 4'b0;
+         axi_wvalid <= 0;
+         
          state <= WAITING_REQUEST;
       end
    endtask
@@ -163,7 +163,7 @@ module mmu(
                end else begin
                   mem_response_enable <= 1;
                end
-                state <= WAITING_RECEIVE;              
+               state <= WAITING_RECEIVE;              
             end
          end else if (state == WAITING_RECEIVE) begin
             fetch_response_enable <= 0;

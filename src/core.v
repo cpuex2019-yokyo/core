@@ -48,9 +48,9 @@ module core_wrapper
               .mreq_wstrb(mreq_wstrb),
               .mem_response_enable(mem_response_enable),
               .mresp_data(mresp_data),
-              
+      
               .ext_intr(ext_intr),
-              
+      
               .software_intr(software_intr),
               .timer_intr(timer_intr),
               .time_full(time_full));
