@@ -11,7 +11,7 @@ module bram(
             output reg        ena,
             output wire       rsta,
             output reg [3:0]  wea,
-            
+
 
 	        input wire [31:0] axi_araddr,
 	        output reg        axi_arready,
