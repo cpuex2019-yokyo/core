@@ -52,7 +52,7 @@ module mmu(
            output reg        axi_wvalid);
 
 
-   typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID} memistate_t;
+   typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID, WAITING_RECEIVE} memistate_t;
    memistate_t                 state;
 
    typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
@@ -60,11 +60,29 @@ module mmu(
 
    task init;
       begin
-         axi_wvalid <= 0;
-         axi_awvalid <= 0;
-         axi_arvalid <= 0;
-         axi_bready <= 0;
-         axi_rready <= 0;
+        fetch_response_enable <= 0;
+        fresp_data <= 32'b0;
+        
+        mem_response_enable <= 0;
+        mresp_data <= 32'b0;
+        
+        axi_araddr <= 32'b0;
+        axi_arvalid <= 0;
+        axi_arprot <= 2'b0;
+        
+        axi_bready <= 0;
+        
+        axi_rready <= 0;
+        
+        axi_awaddr <= 32'b0;
+        axi_awvalid <= 0;
+        axi_awprot <= 2'b0;
+        
+        axi_wdata <= 32'b0;
+        axi_wstrb <= 4'b0;
+        axi_wvalid <= 0;
+                 
+         state <= WAITING_REQUEST;
       end
    endtask
 
@@ -88,7 +106,8 @@ module mmu(
                   axi_awvalid <= 1;
                   axi_wstrb <= freq_wstrb;
                   axi_wdata <= freq_wdata;
-                  state <= WAITING_MEM_RVALID;
+                  axi_wvalid <= 1;
+                  state <= WAITING_MEM_WREADY;
                end
             end else if (mem_request_enable) begin
                cause <= CAUSE_MEM;
@@ -103,7 +122,8 @@ module mmu(
                   axi_awvalid <= 1;
                   axi_wstrb <= mreq_wstrb;
                   axi_wdata <= mreq_wdata;
-                  state <= WAITING_MEM_RVALID;
+                  axi_wvalid <= 1;
+                  state <= WAITING_MEM_WREADY;
                end
             end
          end else if (state == WAITING_MEM_RREADY) begin
@@ -114,6 +134,7 @@ module mmu(
             end
          end else if (state == WAITING_MEM_RVALID) begin
             if (axi_rvalid) begin
+               state <= WAITING_RECEIVE;
                axi_rready <= 0;
                if (cause == CAUSE_FETCH) begin
                   fresp_data <= axi_rdata;
@@ -142,7 +163,12 @@ module mmu(
                end else begin
                   mem_response_enable <= 1;
                end
+                state <= WAITING_RECEIVE;              
             end
+         end else if (state == WAITING_RECEIVE) begin
+            fetch_response_enable <= 0;
+            mem_response_enable <= 0;
+            state <= WAITING_REQUEST;
          end
       end else begin
          init();

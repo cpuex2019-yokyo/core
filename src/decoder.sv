@@ -184,6 +184,12 @@ module decoder
                                || _csrrsi
                                || _csrrci);
    
+   task init;
+       begin
+        completed <= 0;
+       end
+   endtask
+   
    always @(posedge clk) begin
       if (rstn) begin
          if (enabled) begin
@@ -325,8 +331,8 @@ module decoder
                          32'b0;
          end
       end else begin
-         completed <= 0;
+         init();
       end
-   end
+  end  
 endmodule
 `default_nettype wire

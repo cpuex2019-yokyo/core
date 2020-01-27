@@ -35,6 +35,12 @@ module mem(
 
    task init;
       begin
+         request_enable <= 0;
+         mode <= 0;
+         addr <= 0;
+         wdata <= 0;
+         wstrb <= 0;
+         
          completed <= 0;
          state <= WAITING_REQUEST;
       end
@@ -47,7 +53,6 @@ module mem(
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && enabled) begin
-
             if (instr.is_load) begin
                completed <= 0;
 
@@ -110,7 +115,9 @@ module mem(
                   wstrb <= 4'b1111;
                   wdata <= arg;
                end
+               request_enable <= 1;               
             end else begin
+               result <= arg;
                completed <= 1;
             end
          end else if (state == WAITING_DONE && response_enable) begin
@@ -153,6 +160,7 @@ module mem(
                result <= 32'b0;
             end
          end else begin
+            request_enable <= 0;
             completed <= 0;
          end
       end else begin

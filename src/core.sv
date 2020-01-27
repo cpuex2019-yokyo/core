@@ -39,11 +39,11 @@ module core
    wire               reg_w_enable;
    registers _registers(.clk(clk),
                         .rstn(rstn),
-                        .r_enabled(decode_enabled),
+                        .r_enabled(is_fetch_done),
 
                         .rs1(rs1_a),
                         .rs2(rs2_a),
-
+  
                         .w_enable(reg_w_enable),
                         .w_addr(reg_w_dest),
                         .w_data(reg_w_data),
@@ -308,11 +308,10 @@ module core
    // decode stage
    /////////
    // control flags
-   (* mark_debug = "true" *) reg                decode_enabled;
    (* mark_debug = "true" *) wire               is_decode_done;
 
    // stage input
-   reg [31:0]          instr_d_in;
+    // none
 
    // stage outputs
    instructions instr_d_out;
@@ -323,7 +322,7 @@ module core
    decoder _decoder(.clk(clk),
                     .rstn(rstn),
 
-                    .enabled(decode_enabled),
+                    .enabled(is_fetch_done),
                     .completed(is_decode_done),
 
                     .pc(pc),
@@ -368,11 +367,9 @@ module core
    (* mark_debug = "true" *) wire               is_mem_done;
 
    // stage inputs
-   instructions instr_m_in;
    reg [31:0]          mem_arg;
 
    // stage outputs
-   instructions instr_m_out;
    wire [31:0]         mem_result;
 
    wire                is_a_read = (state == EXEC_ATOM1);
@@ -430,22 +427,24 @@ module core
    /////////////////////
    task init;
       begin
-         pc <= 32'h80000000; // initial pos
-
+         //pc <= 32'h80000000; // initial pos
+         pc <= 32'h00001000;
+         
          fetch_enabled <= 0;
-         decode_enabled <= 0;
          exec_enabled <= 0;
          mem_enabled <= 0;
          write_enabled <= 0;
 
-         state <= INIT;         
+         state <= INIT;
+         
+         // TODO: init csr
+         cpu_mode <= CPU_M;        
       end
    endtask
 
    task clear_enabled;
       begin
          fetch_enabled <= 0;
-         decode_enabled <= 0;
          exec_enabled <= 0;
          mem_enabled <= 0;
          write_enabled <= 0;
@@ -453,7 +452,7 @@ module core
    endtask // clear_enabled
 
    wire is_interrupted = software_intr || timer_intr || ext_intr;   
-   task handle_intr;
+   task handle_intr_and_pc;
       begin
          fetch_enabled <= 1;
          state <= FETCH;         
@@ -476,13 +475,7 @@ module core
                                 cpu_mode == CPU_U? 8:
                                 12;               
             end
-         end
-      end
-   endtask // handle_intr
-
-   task set_pc_after_exec;
-      begin
-         if (instr.mret) begin
+         end else if (instr.mret) begin
             if (cpu_mode >= CPU_M) begin
                pc <= _mepc;
                // TODO
@@ -743,12 +736,10 @@ module core
    always @(posedge clk) begin
       if(rstn) begin
          if (state == INIT) begin
-            handle_intr();            
-         end if (state == FETCH && is_fetch_done) begin
+            state <= FETCH;
+            fetch_enabled <= 1;
+         end else if (state == FETCH && is_fetch_done) begin
             state <= DECODE;
-            
-            // start to decode ... f -> d
-            decode_enabled <= 1;
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
             register <= register_d_out;
@@ -774,6 +765,7 @@ module core
                exec_enabled <= 1;
             end
          end else if (state == EXEC_PRIV) begin 
+            exec_enabled <= 0;
             if (is_csr_valid) begin
                state <= WRITE;
                write_csr(instr.imm[11:0], csr_v(csr_value));
@@ -784,7 +776,8 @@ module core
             end else begin
                invalid_csr_addr(instr.imm[11:0]);               
             end
-         end else if (state == EXEC_ATOM1 && is_mem_done) begin            
+         end else if (state == EXEC_ATOM1 && is_mem_done) begin   
+            exec_enabled <= 0;         
             state <= EXEC_ATOM2;
             
             // prepare to write ... m -> w
@@ -794,18 +787,18 @@ module core
             // start to store ... m -> (binop)-> m
             // op tmp, rs2, rd -> sw tmp, (rs1)
             mem_enabled <= 1;                    
-            mem_arg <= instr_m_out.amoswap? register.rs2:
-                       instr_m_out.amoadd? mem_result + register.rs2:
-                       instr_m_out.amoand? mem_result & register.rs2:
-                       instr_m_out.amoor? mem_result | register.rs2:
-                       instr_m_out.amoxor? mem_result ^ register.rs2:
-                       instr_m_out.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
+            mem_arg <= instr.amoswap? register.rs2:
+                       instr.amoadd? mem_result + register.rs2:
+                       instr.amoand? mem_result & register.rs2:
+                       instr.amoor? mem_result | register.rs2:
+                       instr.amoxor? mem_result ^ register.rs2:
+                       instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
                                             register.rs2):
-                       instr_m_out.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
+                       instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
                                             mem_result):
-                       instr_m_out.amomaxu? (mem_result > register.rs2? mem_result:
+                       instr.amomaxu? (mem_result > register.rs2? mem_result:
                                              mem_result):
-                       instr_m_out.amominu? (mem_result > register.rs2? register.rs2:
+                       instr.amominu? (mem_result > register.rs2? register.rs2:
                                              mem_result):
                        0;
          end else if (state == EXEC_ATOM2 && is_mem_done) begin
@@ -814,6 +807,7 @@ module core
             // start to write ... args are prepared when it leaves from EXEC_ATOM1
             write_enabled <= 1;
          end else if (state == EXEC && is_exec_done) begin
+            exec_enabled <= 0;
             // TODO: implement wfi correctly, although the spec says regarding wfi as nop is legal...
             if (instr.ecall || instr.ebreak || instr.fence || instr.fencei) begin
                state <= WRITE;
@@ -825,22 +819,21 @@ module core
                end
             end else begin
                state <= MEM;
-
-               set_pc_after_exec();
-
                // start to operate mem ... e -> m
                mem_enabled <= 1;
                mem_arg <= exec_result;
             end                        
          end else if (state == MEM && is_mem_done) begin
+            mem_enabled <= 0;
             state <= WRITE;
 
             // start to write ... m -> w
             write_enabled <= 1;
             data_to_write <= mem_result;
          end else if (state == WRITE && is_write_done) begin
+            write_enabled <= 0;
             // handle interrupts and jump to FETCH stage
-            handle_intr();            
+            handle_intr_and_pc();            
          end else begin
             // In the next clock after enabling *_enabled, we have to pull down them to zero.
             clear_enabled();

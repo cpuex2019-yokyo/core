@@ -101,6 +101,8 @@ module alu
          if (enabled) begin
             result <= _result;
             completed <= 1;
+         end else begin
+            completed <= 0;
          end
       end else begin
          completed <= 0;

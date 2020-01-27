@@ -40,17 +40,29 @@ module bram(
 
    reg [4:0]                  state;
    localparam WAITING_QUERY = 0;
-   localparam WAITING_MEM1 = 1;
-   localparam WAITING_MEM2 = 2;
-   localparam WAITING_RREADY = 3;   
-   localparam WAITING_WROTE = 4;   
-   localparam WAITING_BREADY = 5;
+
+   localparam WAITING_MEM1 = 2;
+   localparam WAITING_MEM2 = 3;
+   localparam WAITING_RREADY = 4;
+  
+   localparam WAITING_WROTE = 6;   
+   localparam WAITING_BREADY = 7;
 
    assign rsta = !rstn;
    assign clka = clk;   
    
+   wire [31:0] araddr_offset = axi_araddr - 32'h80000000;
+   wire [31:0] awaddr_offset = axi_awaddr - 32'h80000000;
    
-   initial begin
+   task init;
+   begin
+         state <= WAITING_QUERY;
+      
+      addra <= 0;
+      dina <= 0;
+      ena <= 1;
+      wea <= 0;
+      
       axi_arready <= 1;
 
       axi_bresp <= 2'b0;            
@@ -62,16 +74,21 @@ module bram(
       
       axi_awready <= 1;
       
-      axi_wready <= 1;         
+      axi_wready <= 1;   
+      end
+   endtask
+
+   initial begin
+    init();      
    end
+   
    
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_QUERY) begin
             if (axi_arvalid) begin
                axi_arready <= 0;
-               addra <= axi_araddr;  
-               ena <= 1;             
+               addra <= araddr_offset;       
                state <= WAITING_MEM1;
             end else if (axi_wvalid) begin
                axi_wready <= 0;
@@ -79,13 +96,11 @@ module bram(
                wea <= axi_wstrb;         
             end else if (axi_awvalid) begin
                axi_awready <= 0;  
-               addra <= axi_awaddr;               
+               addra <= awaddr_offset;               
             end else if (!axi_awready && !axi_wready) begin
-               ena <= 1;
-               state <= WAITING_WROTE;               
-            end            
-         end else if (tate == WAITING_MEM1) begin
-            ena <= 0;
+               state <= WAITING_WROTE;         
+            end         
+         end else if (state == WAITING_MEM1) begin
             state <= WAITING_MEM2;            
          end if (state == WAITING_MEM2) begin
             axi_rvalid <= 1;
@@ -98,7 +113,6 @@ module bram(
                state <= WAITING_QUERY;               
             end
          end if (state == WAITING_WROTE) begin            
-            ena <= 0;
             axi_bresp <= 2'b0;
             axi_bvalid <= 1;            
             state <= WAITING_BREADY;            

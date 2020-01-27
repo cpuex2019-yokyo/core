@@ -34,6 +34,11 @@ module fetch
       begin
          completed <= 0;
          state <= WAITING_REQUEST;
+         mode <= 0;
+         addr <= 0;
+         wdata <= 0;
+         wstrb <= 0;
+         request_enable <= 0;
       end
    endtask
 
@@ -57,6 +62,7 @@ module fetch
             instr_raw <= data;
          end else begin
             completed <= 0;
+            request_enable <= 0;
          end
       end else begin
          init();
