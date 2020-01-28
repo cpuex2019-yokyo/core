@@ -4,7 +4,7 @@
 module registers
   (input wire         clk,
    input wire        rstn,
-   input wire [31:0] pc,
+
    input wire        r_enabled,
 
    input wire [4:0]  rs1,

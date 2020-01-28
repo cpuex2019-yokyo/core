@@ -16,24 +16,31 @@ module mem(
            output reg [31:0] wdata,
            output reg [3:0]  wstrb, 
            input wire        response_enable,
-           input [31:0]      data,
+           input wire [31:0] data,
 
            // input
            input             instructions instr,
            input             regvpair register,
-           input wire [31:0] addr,
+           input wire [31:0] arg,
+           input wire        is_a_read,
+           input wire        is_a_write,
 
            // output
-           output            instructions instr_n,
            output reg [31:0] result);
 
 
    localparam WAITING_REQUEST = 0;
    localparam WAITING_DONE = 1;
-   reg                       state;
+   (* mark_debug = "true" *) reg                       state;
 
    task init;
       begin
+         request_enable <= 0;
+         mode <= 0;
+         addr <= 0;
+         wdata <= 0;
+         wstrb <= 0;
+         
          completed <= 0;
          state <= WAITING_REQUEST;
       end
@@ -46,97 +53,114 @@ module mem(
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && enabled) begin
-            instr_n <= instr;
-
             if (instr.is_load) begin
                completed <= 0;
 
                state <= WAITING_DONE;
-               request.mode <= MEMREQ_READ;
-               request.addr <= {addr[31:2], 2'b0};
+               mode <= MEMREQ_READ;
+               addr <= {arg[31:2], 2'b0};
                request_enable <= 1;
-            end else if (instr.is_store) begin
+            end else if (is_a_read) begin
                completed <= 0;
 
                state <= WAITING_DONE;
-               request.mode <= MEMREQ_WRITE;
-               request.addr <= {addr[31:2], 2'b0};
+               mode <= MEMREQ_READ;
+               addr <= arg;               
+               request_enable <= 1;
+            end else if (instr.is_store || is_a_write) begin
+               completed <= 0;
 
+               state <= WAITING_DONE;
+               mode <= MEMREQ_WRITE;
+
+               if (is_a_write) begin
+                  addr <= register.rs1;                  
+               end else begin
+                  addr <= {arg[31:2], 2'b0};
+               end
                if(instr.sb) begin
                   case(addr[1:0])
                     2'b11 : begin
-                       request.wstrb <= 4'b1000;
-                       request.wdata <= {register.rs2[7:0], 24'b0};
+                       wstrb <= 4'b1000;
+                       wdata <= {register.rs2[7:0], 24'b0};
                     end
                     2'b10 : begin
-                       request.wstrb <= 4'b0100;
-                       request.wdata <= {8'b0, register.rs2[7:0], 16'b0};
+                       wstrb <= 4'b0100;
+                       wdata <= {8'b0, register.rs2[7:0], 16'b0};
                     end
                     2'b01 : begin
-                       request.wstrb <= 4'b0010;
-                       request.wdata <= {16'b0, register.rs2[7:0], 8'b0};
+                       wstrb <= 4'b0010;
+                       wdata <= {16'b0, register.rs2[7:0], 8'b0};
                     end
                     2'b00 : begin
-                       request.wstrb <= 4'b0001;
-                       request.wdata <= {24'b0, register.rs2[7:0]};
+                       wstrb <= 4'b0001;
+                       wdata <= {24'b0, register.rs2[7:0]};
                     end
                   endcase
                end else if (instr.sh) begin
                   case(addr[1:0])
                     2'b10 : begin
-                       request.wstrb <= 4'b1100;
-                       request.wdata <= {register.rs2[15:0], 16'b0};
+                       wstrb <= 4'b1100;
+                       wdata <= {register.rs2[15:0], 16'b0};
                     end
                     2'b00 : begin
-                       request.wstrb <= 4'b0011;
-                       request.wdata <= {16'b0, register.rs2[15:0]};
+                       wstrb <= 4'b0011;
+                       wdata <= {16'b0, register.rs2[15:0]};
                     end
                   endcase
                end  else if (instr.sw) begin
-                  request.wstrb <= 4'b1111;
-                  request.wdata <= register.rs2;
+                  wstrb <= 4'b1111;
+                  wdata <= register.rs2;
+               end else if (is_a_write) begin
+                  wstrb <= 4'b1111;
+                  wdata <= arg;
                end
+               request_enable <= 1;               
             end else begin
+               result <= arg;
                completed <= 1;
             end
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
             state <= WAITING_REQUEST;
 
-            if (instr_n.lb) begin
+            if (instr.lb) begin
                case(addr[1:0])
-                 2'b11: result <= {{24{response.data[31]}}, response.data[31:24]};
-                 2'b10: result <= {{24{response.data[23]}}, response.data[23:16]};
-                 2'b01: result <= {{24{response.data[15]}}, response.data[15:8]};
-                 2'b00: result <= {{24{response.data[7]}}, response.data[7:0]};
+                 2'b11: result <= {{24{data[31]}}, data[31:24]};
+                 2'b10: result <= {{24{data[23]}}, data[23:16]};
+                 2'b01: result <= {{24{data[15]}}, data[15:8]};
+                 2'b00: result <= {{24{data[7]}}, data[7:0]};
                  default: result <= 32'b0;
                endcase
-            end else if (instr_n.lh) begin
+            end else if (instr.lh) begin
                case(addr[1:0])
-                 2'b10 : result <= {{16{response.data[31]}}, response.data[31:16]};
-                 2'b00 : result <= {{16{response.data[15]}}, response.data[15:0]};
+                 2'b10 : result <= {{16{data[31]}}, data[31:16]};
+                 2'b00 : result <= {{16{data[15]}}, data[15:0]};
                  default: result <=  32'b0;
                endcase
-            end else if (instr_n.lw) begin
-               result <= response.data;
-            end else if (instr_n.lbu) begin
+            end else if (instr.lw) begin
+               result <= data;
+            end else if (instr.lbu) begin
                case(addr[1:0])
-                 2'b11: result = {24'b0, response.data[31:24]};
-                 2'b10: result <= {24'b0, response.data[23:16]};
-                 2'b01: result <= {24'b0, response.data[15:8]};
-                 2'b00: result <= {24'b0, response.data[7:0]};
+                 2'b11: result = {24'b0, data[31:24]};
+                 2'b10: result <= {24'b0, data[23:16]};
+                 2'b01: result <= {24'b0, data[15:8]};
+                 2'b00: result <= {24'b0, data[7:0]};
                  default: result <= 32'b0;
                endcase
-            end else if (instr_n.lhu) begin
+            end else if (instr.lhu) begin
                case(addr[1:0])
-                 2'b10 : result <= {16'b0, response.data[31:16]};
-                 2'b00 : result <= {16'b0, response.data[15:0]};
+                 2'b10 : result <= {16'b0, data[31:16]};
+                 2'b00 : result <= {16'b0, data[15:0]};
                  default: result <= 32'b0;
-               endcase
+               endcase 
+            end else if (is_a_read) begin
+               result <= data;               
             end else begin
                result <= 32'b0;
             end
          end else begin
+            request_enable <= 0;
             completed <= 0;
          end
       end else begin

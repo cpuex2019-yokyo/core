@@ -16,24 +16,29 @@ module fetch
    output reg [31:0] wdata,
    output reg [3:0]  wstrb, 
    input wire        response_enable,
-   input [31:0]      data,
+   input wire [31:0] data,
 
    // input
    input wire [31:0] pc,
 
-   // output
-   output reg [31:0] pc_n,
+   // outputpc
    output reg [31:0] instr_raw);
 
-
+   assign wdata = 32'b0;
+   
    localparam WAITING_REQUEST = 0;
    localparam WAITING_DONE = 1;
-   reg               state;
+   (* mark_debug = "true" *) reg               state;
 
    task init;
       begin
          completed <= 0;
          state <= WAITING_REQUEST;
+         mode <= 0;
+         addr <= 0;
+         wdata <= 0;
+         wstrb <= 0;
+         request_enable <= 0;
       end
    endtask
 
@@ -47,17 +52,17 @@ module fetch
             completed <= 0;
 
             state <= WAITING_DONE;
-            request.mode <= MEMREQ_READ;
-            request.addr <= pc;
+            mode <= MEMREQ_READ;
+            addr <= pc;
             request_enable <= 1;
-            pc_n <= pc;
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
 
             state <= WAITING_REQUEST;
-            instr_raw <= response.data;
+            instr_raw <= data;
          end else begin
             completed <= 0;
+            request_enable <= 0;
          end
       end else begin
          init();

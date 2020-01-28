@@ -6,7 +6,6 @@ module mmu(
            input wire        rstn,
 
            input wire        fetch_request_enable,
-           input             fetch_request,
            input wire        freq_mode,
            input wire [31:0] freq_addr,
            input wire [31:0] freq_wdata,
@@ -16,7 +15,6 @@ module mmu(
 
 
            input wire        mem_request_enable,
-           input             mem_request,
            input wire        mreq_mode,
            input wire [31:0] mreq_addr,
            input wire [31:0] mreq_wdata,
@@ -54,19 +52,37 @@ module mmu(
            output reg        axi_wvalid);
 
 
-   typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID} memistate_t;
-   memistate_t                 state;
+   typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID, WAITING_RECEIVE} memistate_t;
+   (* mark_debug = "true" *) memistate_t                 state;
 
    typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
-   memicause_t cause;
+   (* mark_debug = "true" *) memicause_t cause;
 
    task init;
       begin
-         axi_wvalid <= 0;
-         axi_awvalid <= 0;
+         fetch_response_enable <= 0;
+         fresp_data <= 32'b0;
+         
+         mem_response_enable <= 0;
+         mresp_data <= 32'b0;
+         
+         axi_araddr <= 32'b0;
          axi_arvalid <= 0;
+         axi_arprot <= 2'b0;
+         
          axi_bready <= 0;
+         
          axi_rready <= 0;
+         
+         axi_awaddr <= 32'b0;
+         axi_awvalid <= 0;
+         axi_awprot <= 2'b0;
+         
+         axi_wdata <= 32'b0;
+         axi_wstrb <= 4'b0;
+         axi_wvalid <= 0;
+         
+         state <= WAITING_REQUEST;
       end
    endtask
 
@@ -79,33 +95,35 @@ module mmu(
          if (state == WAITING_REQUEST) begin
             if (fetch_request_enable) begin
                cause <= CAUSE_FETCH;
-               if (fetch_request.mode == MEMREQ_READ) begin
-                  axi_araddr <= fetch_request.addr;
+               if (freq_mode == MEMREQ_READ) begin
+                  axi_araddr <= freq_addr;
                   axi_arprot <= 3'b000;
                   axi_arvalid <= 1;
                   state <= WAITING_MEM_RREADY;
                end else begin
-                  axi_awaddr <= fetch_request.addr;
+                  axi_awaddr <= freq_addr;
                   axi_awprot <= 3'b000;
                   axi_awvalid <= 1;
-                  axi_wstrb <= fetch_request.wstrb;
-                  axi_wdata <= fetch_request.wdata;
-                  state <= WAITING_MEM_RVALID;
+                  axi_wstrb <= freq_wstrb;
+                  axi_wdata <= freq_wdata;
+                  axi_wvalid <= 1;
+                  state <= WAITING_MEM_WREADY;
                end
             end else if (mem_request_enable) begin
                cause <= CAUSE_MEM;
-               if (mem_request.mode == MEMREQ_READ) begin
-                  axi_araddr <= mem_request.addr;
+               if (mreq_mode == MEMREQ_READ) begin
+                  axi_araddr <= mreq_addr;
                   axi_arprot <= 3'b000;
                   axi_arvalid <= 1;
                   state <= WAITING_MEM_RREADY;
                end else begin
-                  axi_awaddr <= fetch_request.addr;
+                  axi_awaddr <= mreq_addr;
                   axi_awprot <= 3'b000;
                   axi_awvalid <= 1;
-                  axi_wstrb <= fetch_request.wstrb;
-                  axi_wdata <= fetch_request.wdata;
-                  state <= WAITING_MEM_RVALID;
+                  axi_wstrb <= mreq_wstrb;
+                  axi_wdata <= mreq_wdata;
+                  axi_wvalid <= 1;
+                  state <= WAITING_MEM_WREADY;
                end
             end
          end else if (state == WAITING_MEM_RREADY) begin
@@ -116,12 +134,13 @@ module mmu(
             end
          end else if (state == WAITING_MEM_RVALID) begin
             if (axi_rvalid) begin
+               state <= WAITING_RECEIVE;
                axi_rready <= 0;
                if (cause == CAUSE_FETCH) begin
-                  fetch_response.data <= axi_rdata;
+                  fresp_data <= axi_rdata;
                   fetch_response_enable <= 1;
                end else begin
-                  mem_response.data <= axi_rdata;
+                  mresp_data <= axi_rdata;
                   mem_response_enable <= 1;
                end
             end
@@ -144,7 +163,12 @@ module mmu(
                end else begin
                   mem_response_enable <= 1;
                end
+               state <= WAITING_RECEIVE;              
             end
+         end else if (state == WAITING_RECEIVE) begin
+            fetch_response_enable <= 0;
+            mem_response_enable <= 0;
+            state <= WAITING_REQUEST;
          end
       end else begin
          init();

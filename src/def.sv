@@ -17,6 +17,7 @@ typedef struct {
    reg [4:0]   rs1;
    reg [4:0]   rs2;
    reg [31:0]  imm;
+   reg [6:0]   funct7;
    reg [31:0]  pc;
 
    /////////
@@ -65,8 +66,17 @@ typedef struct {
    reg         sra;
    reg         i_or;
    reg         i_and;
-
-   // TODO
+   // other
+   reg         fence;
+   reg         fencei;
+   reg         ecall;
+   reg         ebreak;
+   reg         csrrw;
+   reg         csrrs;
+   reg         csrrc;
+   reg         csrrwi;
+   reg         csrrsi;
+   reg         csrrci;
 
    /////////
    // rv32m
@@ -83,18 +93,32 @@ typedef struct {
    /////////
    // rv32a
    /////////
-   // TODO
-
+   reg         lr;
+   reg         sc;
+   reg         amoswap;
+   reg         amoadd;
+   reg         amoxor;
+   reg         amoand;
+   reg         amoor;
+   reg         amomin;
+   reg         amomax;
+   reg         amominu;
+   reg         amomaxu;   
+   
    /////////
    // rv32s
    /////////
-   // TODO
+   reg         sret;
+   reg         mret;
+   reg         wfi;
+   reg         sfence_vma;   
 
    /////////
    // other controls
    /////////
+   reg         rv32a;
+   reg         csrop;         
    reg         writes_to_reg;
-
    reg         is_store;
    reg         is_load;
    reg         is_conditional_jump;
