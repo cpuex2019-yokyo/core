@@ -504,7 +504,7 @@ module core
       end
    endtask 
 
-   wire [1:0] next_cpu_mode = << next_irq
+   wire [1:0] next_cpu_mode = 1; // TODO
               task set_cause(input [31:0] value);
                  begin
                     if (next_cpu_mode == CPU_M) begin
