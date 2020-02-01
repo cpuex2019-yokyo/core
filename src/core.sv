@@ -3,7 +3,7 @@
 
 module core
   (input wire clk,
-   input wire         rstn,
+   input wire         rstn, 
 
    // bus
    output wire        fetch_request_enable,
@@ -29,7 +29,13 @@ module core
    // from CLINT
    input wire         software_intr,
    input wire         timer_intr,
-   input wire [63:0]  time_full
+   input wire [63:0]  time_full,
+
+   // to MMU
+   output wire [31:0] o_satp,
+   output wire [1:0]  o_cpu_mode,
+   output wire        o_mxr,
+   output wire        o_sum
    );
 
    // internal state
@@ -765,6 +771,13 @@ module core
    /////////////////////
    // main
    /////////////////////
+
+   assign o_satp = _satp;
+   assign o_cpu_mode = cpu_mode;
+   assign o_mxr = _mstatus[19];
+   assign o_sum = _mstatus[18];
+   
+   
    initial begin
       init();
    end

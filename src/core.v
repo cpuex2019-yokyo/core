@@ -28,7 +28,14 @@ module core_wrapper
    // from CLINT
    input wire         software_intr,
    input wire         timer_intr,
-   input wire [63:0]  time_full);
+   input wire [63:0]  time_full,
+   
+   // to MMU
+   output wire [31:0] o_satp,
+   output wire [1:0]  o_cpu_mode,
+   output wire        o_mxr,
+   output wire        o_sum
+   );   
 
    core _core(.clk(clk),
               .rstn(rstn),
@@ -50,10 +57,15 @@ module core_wrapper
               .mresp_data(mresp_data),
       
               .ext_intr(ext_intr),
-      
+              
               .software_intr(software_intr),
               .timer_intr(timer_intr),
-              .time_full(time_full));
+              .time_full(time_full),
+
+              .o_satp(o_satp),
+              .o_cpu_mode(o_cpu_mode),
+              .o_mxr(o_mxr),
+              .o_sum(o_sum));   
    
 endmodule
 
