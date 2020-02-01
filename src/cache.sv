@@ -43,7 +43,14 @@ module cache(
            output reg        axi_wvalid);
 
 
-   typedef enum reg [3:0]    {WAITING_REQUEST, WAITING_MEM_RREADY, WAITING_MEM_WREADY, WAITING_MEM_RVALID, WAITING_MEM_BVALID, WAITING_RECEIVE} memistate_t;
+   typedef enum reg [3:0]    {
+                              WAITING_REQUEST, 
+                              WAITING_MEM_RREADY, 
+                              WAITING_MEM_WREADY, 
+                              WAITING_MEM_RVALID, 
+                              WAITING_MEM_BVALID, 
+                              WAITING_RECEIVE
+                              } memistate_t;   
    (* mark_debug = "true" *) memistate_t                 state;
 
    task init;
