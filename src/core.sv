@@ -52,22 +52,48 @@ module core
    
    // interrupts
    /////////
-   reg [31:0]          exception_number;   
-   reg [31:0]          exception_cause;   
-
-   task update_pending_interrupt;
+   wire               is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
+                      || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
+                      || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
+                          && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
+   task update_pending_bits;
       begin
-         // NOTE: is this correct?
          mip <= mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
       end
-   endtask // update_pending_interrupt
-
-   task raise_illegal_instruction(input [31:0] _cause);
+   endtask
+   
+   reg [4:0]         exception_number;   
+   reg [31:0]        exception_tval;        
+   task raise_illegal_instruction(input [31:0] _tval);
       begin
-         exception_number <= 2;         
-         exception_cause <= _cause;
+         exception_number <= 5'd2;         
+         exception_tval <= _tval;
       end
-   endtask  
+   endtask
+   
+   task raise_instruction_adress_misaligned(input [31:0] _tval);
+      begin
+         exception_number <= 5'd0;         
+         exception_tval <= _tval;
+      end
+   endtask // raise_instruction_adress_misaligned
+
+   task raise_ecall;      
+      begin
+         exception_number <= cpu_mode == CPU_M? 5'd11:
+                             cpu_mode == CPU_S? 5'd9:
+                             cpu_mode == CPU_U? 5'd8:
+                             5'd16;
+         exception_tval <= 32'd0; // NOTE: is it okay?         
+      end
+   endtask
+
+   task raise_ebreak;      
+      begin
+         exception_number <= 5'd3;         
+         exception_tval <= 32'd0; // NOTE: is it okay?         
+      end
+   endtask
    
    // csrs
    /////////
@@ -280,7 +306,7 @@ module core
       begin
          if (_mstatus_tvm && cpu_mode == CPU_S) begin
             state <= TRAP;
-            raise_illegal_instruction(pc);            
+            raise_illegal_instruction(instr_raw);            
          end else begin
             // TODO: flush TLB
             _satp <= value;            
@@ -521,26 +547,6 @@ module core
       end
    endtask
 
-   wire is_interrupted = (cpu_mode == CPU_M && ((_mip[11] && _mie[11]) || (_mip[7] && _mie[7]) || (_mip[3] && _mie[3])) && _mstatus_mie)
-        || (CPU_S >= cpu_mode && ((_mip[11] && _mie[11]) || (_mip[7] && _mie[7]) || (_mip[3] && _mie[3])))
-        || (((_mideleg[11] && _mip[11] && _mie[11]) || (_mideleg[7] && _mip[7] && _mie[7]) || (_mideleg[3] && _mip[3] && _mie[3]))
-            && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode); 
-   task go_next;
-      begin
-         if (is_interrupted) begin
-            state <= TRAP;            
-         end else begin
-            fetch_enabled <= 1;
-            state <= FETCH;
-            if (is_jump_chosen) begin
-               pc <= jump_dest;
-            end else begin
-               pc <= pc + 4;
-            end
-         end
-      end
-   endtask 
-
    task set_cause(input [1:0] next_cpu_mode, input [31:0] value);
       begin
          if (next_cpu_mode == CPU_M) begin
@@ -573,15 +579,14 @@ module core
 
    task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec) begin
       if (next_cpu_mode == CPU_M) begin
-            pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
-                  _mtvec + 4 * _vec;
+         pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
+               _mtvec + 4 * _vec;
       end else if (next_cpu_mode == CPU_S) begin
          pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _setvec:
                _stvec + 4 * _vec;         
-      end
-         
-   end
-     
+      end      
+   endtask
+   
    // here we assume that this function will used in the decode phase
    function read_csr(input [11:0] addr);
       begin
@@ -763,118 +768,73 @@ module core
    initial begin
       init();
    end
-
+   
    always @(posedge clk) begin
-      if(rstn) begin
-         if (state != TRAP && state != EXEC_PRIV) begin
-            update_pending_interrupt();            
-                       
-            if (state == INIT) begin
-               state <= FETCH;
-               fetch_enabled <= 1;
-            end else if (state == FETCH && is_fetch_done) begin
-               state <= DECODE;
-            end else if (state == DECODE && is_decode_done) begin
-               instr <= instr_d_out;
-               register <= register_d_out;
-
-               if (instr_d_out.mret) begin
-                  state <= TRAP;                  
-                  if (cpu_mode >= CPU_M) begin
-                  end else begin
-                     raise_illegal_instruction(pc);            
-                  end
-               end else if (instr_d_out.sret) begin
-                  state <= TRAP;                  
-                  if (cpu_mode >= CPU_S) begin
-                  end else begin
-                     raise_illegal_instruction(pc);            
-                  end                  
-               end else if (instr_d_out.csrop) begin
-                  state <= EXEC_PRIV;           
-                  {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                            
-               end else if (instr_d_out.rv32a) begin               
-                  state <= EXEC_ATOM1;
-                  // NOTE:
-                  // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
-                  // lw rd, (rs1)
-                  // op tmp, rs2, rd
-                  // sw tmp, (rs1)
-                  
-                  // start to load (rs1) ... d -> m
-                  mem_enabled <= 1;          
-                  mem_arg <= register.rs1; // load addr: rs1
-               end else begin
-                  state <= EXEC;
-
-                  // start to execute ... d -> e
-                  exec_enabled <= 1;
-               end
-            end else if (state == EXEC_ATOM1 && is_mem_done) begin   
-               exec_enabled <= 0;         
-               state <= EXEC_ATOM2;
+      if(rstn) begin         
+         if (state == INIT) begin
+            state <= FETCH;
+            fetch_enabled <= 1;
+         end else if (state == FETCH && is_fetch_done) begin
+            state <= DECODE;
+         end else if (state == DECODE && is_decode_done) begin
+            instr <= instr_d_out;
+            register <= register_d_out;
                
-               // prepare to write ... m -> w
-               // here we do not enable write yet
-               data_to_write <= mem_result;
-
-               // start to store ... m -> (binop)-> m
-               // op tmp, rs2, rd -> sw tmp, (rs1)
-               mem_enabled <= 1;                    
-               mem_arg <= instr.amoswap? register.rs2:
-                          instr.amoadd? mem_result + register.rs2:
-                          instr.amoand? mem_result & register.rs2:
-                          instr.amoor? mem_result | register.rs2:
-                          instr.amoxor? mem_result ^ register.rs2:
-                          instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
-                                         register.rs2):
-                          instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
-                                         mem_result):
-                          instr.amomaxu? (mem_result > register.rs2? mem_result:
-                                          mem_result):
-                          instr.amominu? (mem_result > register.rs2? register.rs2:
-                                          mem_result):
-                          0;
-            end else if (state == EXEC_ATOM2 && is_mem_done) begin
-               state <= WRITE;
-
-               // start to write ... args are prepared when it leaves from EXEC_ATOM1
-               write_enabled <= 1;
-            end else if (state == EXEC && is_exec_done) begin
-               exec_enabled <= 0;
-               // TODO(future): implement wfi correctly, although the spec says regarding wfi as nop is legal...
-               if (instr.fence || instr.fencei || instr.wfi) begin
-                  state <= WRITE;
-               end else begin
-                  state <= MEM;
-                  // start to operate mem ... e -> m
-                  mem_enabled <= 1;
-                  mem_arg <= exec_result;
-               end                        
-            end else if (state == MEM && is_mem_done) begin
-               mem_enabled <= 0;
-               state <= WRITE;
-
-               // start to write ... m -> w
-               write_enabled <= 1;
-               data_to_write <= mem_result;
-            end else if (state == WRITE) begin
-               if(is_write_done) begin
-                  write_enabled <= 0;
-                  go_next();            
-               end               
+            if (instr_d_out.csrop) begin
+               state <= EXEC_PRIV;           
+               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                            
+            end else if (instr_d_out.rv32a) begin               
+               state <= EXEC_ATOM1;
+               // NOTE:
+               // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
+               // lw rd, (rs1)
+               // op tmp, rs2, rd
+               // sw tmp, (rs1)
+               
+               // start to load (rs1) ... d -> m
+               mem_enabled <= 1;          
+               mem_arg <= register.rs1; // load addr: rs1
             end else begin
-               // In the next clock after enabling *_enabled, we have to pull down them to zero.
-               clear_enabled();
-            end        
+               state <= EXEC;
+
+               // start to execute ... d -> e
+               exec_enabled <= 1;
+            end
+         end else if (state == EXEC_ATOM1 && is_mem_done) begin   
+            exec_enabled <= 0;         
+            state <= EXEC_ATOM2;
+            
+            // prepare to write ... m -> w
+            // here we do not enable write yet
+            data_to_write <= mem_result;
+
+            // start to store ... m -> (binop)-> m
+            // op tmp, rs2, rd -> sw tmp, (rs1)
+            mem_enabled <= 1;                    
+            mem_arg <= instr.amoswap? register.rs2:
+                       instr.amoadd? mem_result + register.rs2:
+                       instr.amoand? mem_result & register.rs2:
+                       instr.amoor? mem_result | register.rs2:
+                       instr.amoxor? mem_result ^ register.rs2:
+                       instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
+                                      register.rs2):
+                       instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
+                                      mem_result):
+                       instr.amomaxu? (mem_result > register.rs2? mem_result:
+                                       mem_result):
+                       instr.amominu? (mem_result > register.rs2? register.rs2:
+                                       mem_result):
+                       0;
+         end else if (state == EXEC_ATOM2 && is_mem_done) begin
+            state <= WRITE;
+
+            // start to write ... args are prepared when it leaves from EXEC_ATOM1
+            write_enabled <= 1;
          end else if (state == EXEC_PRIV) begin 
             exec_enabled <= 0;
             if (is_csr_valid) begin
                state <= WRITE;
 
-               if (instr.imm[11:0] != 12'h344) begin
-                  update_pending_interrupt();                     
-               end                                   
                write_csr(instr.imm[11:0], csr_v(csr_value));
 
                // start to write ... e -> w
@@ -884,11 +844,72 @@ module core
                // invalid_csr_addr ... instr.imm[11:0]
                state <= TRAP;                  
             end
+         end else if (state == EXEC && is_exec_done) begin
+            exec_enabled <= 0;
+            // TODO(future): implement wfi correctly, although the spec says regarding wfi as nop is legal...
+            if (instr.fence || instr.fencei || instr.wfi) begin
+               state <= WRITE;
+            end else if (instr.mret) begin
+               state <= TRAP;                  
+               if (cpu_mode >= CPU_M) begin
+               end else begin
+                  raise_illegal_instruction(instr_raw);            
+               end
+            end else if (instr.sret) begin
+               state <= TRAP;                  
+               if (cpu_mode >= CPU_S) begin
+               end else begin
+                  raise_illegal_instruction(instr_raw);            
+               end
+            end else if(instr.ecall) begin
+               state <= TRAP;               
+               raise_ecall();
+            end else if (instr.ebreak) begin
+               state <= TRAP;               
+               raise_ebreak();               
+            end else begin
+               state <= MEM;
+               // start to operate mem ... e -> m
+               mem_enabled <= 1;
+               mem_arg <= exec_result;
+            end                        
+         end else if (state == MEM && is_mem_done) begin
+            mem_enabled <= 0;
+            state <= WRITE;
+
+            // start to write ... m -> w
+            write_enabled <= 1;
+            data_to_write <= mem_result;
+         end else if (state == WRITE) begin
+            if(is_write_done) begin
+               write_enabled <= 0;
+               if (is_interrupted) begin
+                  state <= TRAP;            
+               end else begin
+                  if (is_jump_chosen) begin
+                     if (jump_dest[1:0] == 2'b0) begin
+                        fetch_enabled <= 1;
+                        state <= FETCH;
+                        pc <= jump_dest;
+                     end else begin
+                        state <= TRAP;                        
+                        raise_instruction_address_misaligned();                        
+                     end
+                  end else begin
+                     fetch_enabled <= 1;
+                     state <= FETCH;
+                     pc <= pc + 4;
+                  end
+               end
+            end               
          end else if (state == TRAP) begin
+            fetch_enabled <= 1;
+            state <= FETCH;
+            
             // state == TRAP
             // - by interrupt
             // - by exception
-            // - by instruction
+            // - by instruction            
             if (instr.mret) begin
                // trap by instruction
                pc <= _mepc;
@@ -905,35 +926,22 @@ module core
                // mstatus.spp <= 0;
                cpu_mode <= _mstatus_spp;               
                _mstatus <= {_mstatus[31:9], 1'b0, _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};               
-            end else if(instr.ecall || instr.ebreak) begin
-               set_pc_by_tvec(1'b0, _medeleg[3]? CPU_S : CPU_M, 32'b0);               
-               set_epc(_medeleg[8]? CPU_S : CPU_M, instr.pc);
-               if (instr.ecall) begin
-                  set_cause(_medeleg[8]? CPU_S: CPU_M, 
-                            cpu_mode == CPU_M? 32'd11:
-                            cpu_mode == CPU_S? 32'd9:
-                            cpu_mode == CPU_U? 32'd8:
-                            31'd16);
-               end else if (instr.ebreak) begin
-                  set_cause(_medeleg[3]? CPU_S: CPU_M , 32'd3);               
-               end
-               set_tval(_medeleg[3]? CPU_S : CPU_M, 32'd0);
             end else if (is_interrupted) begin
                // trap by interrupt
                // NOTE: is the value of *epc correct?
-               if (_mip[11] && _mie[11]) begin
+               if (ext_intr && _mie[11]) begin
                   // ext
                   set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
                   set_epc(_mideleg[11]? CPU_S : CPU_M, instr.pc);                  
                   set_cause(_mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
                   set_tval(_mideleg[11]? CPU_S : CPU_M, 32'd0);
-               end else if (_mip[3] && _mie[3]) begin
+               end else if (software_intr && _mie[3]) begin
                   // software
                   set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);                  
                   set_epc(_mideleg[3]? CPU_S : CPU_M, instr.pc);                  
                   set_cause(_mideleg[3]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);
                   set_tval(_mideleg[3]? CPU_S : CPU_M, 32'd0);
-               end else if (_mip[7] && _mie[7]) begin
+               end else if (timer_intr && _mie[7]) begin
                   // timer
                   set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);                  
                   set_epc(_mideleg[7]? CPU_S : CPU_M, instr.pc);                  
@@ -942,12 +950,19 @@ module core
                end
             end else begin
                // trap by exception (e.g. memory)
-               // TODO
+               set_pc_by_tvec(1'b0, _medeleg[exception_number]? CPU_S : CPU_M, 32'b0);
+               set_epc(_medeleg[exception_number]? CPU_S : CPU_M, instr.pc);                  
+               set_cause(_medeleg[exception_number]? CPU_S : CPU_M, {27'b0, exception_number});
+               set_tval(_medeleg[exception_number]? CPU_S : CPU_M, exception_tval);               
             end
-         end            
-      end else begin
-         init();
-      end
+         end else begin
+            // In the next clock after enabling *_enabled, we have to pull down them to zero.
+            clear_enabled();
+         end
+      end            
+   end else begin
+      init();
    end
-endmodule
+end
+      endmodule
 `default_nettype wire
