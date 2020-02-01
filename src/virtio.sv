@@ -1,4 +1,6 @@
 `default_nettype none
+`include "def.sv"
+`include "virtio_params.sv"
 
 module virtio(
               // bus for core
@@ -27,13 +29,13 @@ module virtio(
 	          input wire        core_wvalid,
 
               // bus
-              output reg        request_enable,
-              output reg        mode,
-              output reg [31:0] addr,
-              output reg [31:0] wdata,
-              output reg [3:0]  wstrb, 
-              input wire        response_enable,
-              input wire [31:0] data,
+              output reg        mem_request_enable,
+              output reg        mem_mode,
+              output reg [31:0] mem_addr,
+              output reg [31:0] mem_wdata,
+              output reg [3:0]  mem_wstrb, 
+              input wire        mem_response_enable,
+              input wire [31:0] mem_data,
 
               // general
 	          input wire        clk,
@@ -76,17 +78,22 @@ module virtio(
                                  } interface_state;
    
    enum reg [5:0]               {
-                                 WAITING_NOTIFICATION, 
-                                 COLLECT_DESCRIPTOR,
-                                 WAITING_DISC,
+                                 WAITING_NOTIFICATION,
+                                 START_TO_HANDLE,
+                                 WAITING_MEM_AVAIL_IDX,
+                                 WAITING_MEM_AVAIL_IDX,
+                                 LOAD_FIRST_DESC,
+                                 HANDLE_FIRST_DESC,
+                                 LOAD_SECOND_DESC,
+                                 HANDLE_SECOND_DESC,
+                                 LOAD_THIRD_DESC,
+                                 HANDLE_THIRD_DESC,
+
+                                 // TODO: add appropriate states for disk controlling
+                                 CONTROL_DISK,
+                                 
                                  RAISE_IRQ                                 
                                  } controller_state;
-
-   enum reg [5:0]               {
-                                 
-                                 } collecting_state;
-   
-
 
    task init;
       begin
@@ -138,8 +145,7 @@ module virtio(
            32'h40: queue_pfn <= data;
            32'h50: begin
               queue_notify <= data;
-              controller_state <= COLLECT_DESCRIPTOR;
-              
+              controller_state <= START_TO_HANDLE;                            
            end
            32'h64: interrupt_ack <= data;
            32'h70: device_status <= data;           
@@ -201,14 +207,154 @@ module virtio(
       end
    end
 
+
+   reg [31:0] avail_idx;
+   reg [31:0] used_idx;
+   
+   VRingDesc desc;
+   // *(desc_head + 16 * (used_idx % queue_num))
+   wire [31:0] desc_base <= desc_head + 16 * ((used_idx-1) mod queue_num);   
+   reg [3:0] load_desc_microstate;   
+   task load_desc(input [5:0] callback_state);
+      begin
+         if (load_desc_microstate == 0) begin
+            load_desc_microstate <= 1;            
+            desc.addr[63:32] <= 32'b0;
+            mem_request_enable <= 1;
+            mem_mode <= MEMREQ_READ;                  
+            mem_addr <= desc_base + 4;
+         end else if (load_desc_microstate == 1) begin
+            if (mem_response_enable) begin
+               load_desc_microstate <= 2;
+               desc.addr[31:0] <= mem_data;               
+               mem_request_enable <= 1;
+               mem_mode <= MEMREQ_MODE;
+               mem_addr <= desc_base + 8;               
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end else if (microstate == 2) begin
+            if (mem_response_enable) begin
+               load_desc_microstate <= 3;
+               desc.len <= mem_data;               
+               mem_request_enable <= 1;
+               mem_mode <= MEMREQ_MODE;
+               mem_addr <= desc_base + 12;               
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end else if (microstate == 3) begin
+            if (mem_response_enable) begin
+               load_desc_microstate <= 0;
+               desc.flags <= mem_data[31:16];
+               desc.next <= mem_data[15:0];               
+               controller_state <= callback_state;               
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end
+      end
+   endtask  
+
+   reg [3:0] load_outhdr_microstate;
+   OutHDR outhdr;   
+   task load_outhdr;            
+      begin
+         if (load_outhdr_microstate == 0) begin
+            load_outhdr_microstate <= 1;
+            outhdr.reserved <= 32'b0;            
+            mem_request_enable <= 1;
+            mem_mode <= MEMREQ_READ;                  
+            mem_addr <= desc.addr[31:0];            
+         end else if (load_outhdr_microstate == 1) begin
+            if (mem_response_enable) begin
+               load_outhdr_microstate <= 2;
+               outhdr.btype[31:0] <= mem_data;               
+               mem_request_enable <= 1;
+               mem_mode <= MEMREQ_MODE;
+               mem_addr <= desc.addr[31:0] + 8;
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end else if (load_outhdr_microstate == 2) begin
+            if (mem_response_enable) begin
+               load_outhdr_microstate <= 3;
+               outhdr.sector[63:32] <= mem_data;               
+               mem_request_enable <= 1;
+               mem_mode <= MEMREQ_MODE;
+               mem_addr <= desc.addr[31:0] + 12;
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end else if (load_outhdr_microstate == 2) begin
+            if (mem_response_enable) begin
+               load_outhdr_microstate <= 0;
+               controller_state <= LOAD_SECOND_DESC;               
+               outhdr.sector[31:0] <= mem_data;               
+            end else begin
+               mem_request_enable <= 0;            
+            end
+         end
+      end
+   endtask // load_outhdr
+
+   reg [31:0] buffer_addr;   
+   reg [31:0] status_addr;   
+     
+   task init_controller;
+      begin
+         avail_idx <= 32'h0;         
+         used_idx <= 32'h0;
+         load_desc_microstate <= 0;         
+      end
+   endtask // init_controller
+
+   
    always @(posedge clk) begin
       if(rstn) begin
          if(controller_state == WAITING_NOTIFICATION) begin
             // Do nothing.
-         end else if (controller_state == COLLECT_DESCRIPTOR) begin
+         end else if (controller_state == START_TO_HANDLE) begin
+            mem_request_enable <= 1;
+            // *(avail_head + 2)            
+            mem_mode <= MEMREQ_READ;            
+            mem_addr <= {avail_head[31:4], 4'd2}; 
+            
+            controller_state <= WAITING_MEM_AVAIL_IDX;            
+         end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
+            request_enable <= 0;
+            if (mem_response_enable) begin
+               avail_idx <= mem_data;
+               if (used_idx != avail_idx) begin
+                  used_idx <= used_idx + 1;
+                  controller_state <= LOAD_FIRST_DESC;                  
+               end else begin
+                  controller_state <= WAITING_NOTIFICATION;                  
+               end
+            end
+         end else if (controller_state == LOAD_FIRST_DESC) begin
+            load_desc(HANDLE_FIRST_DESC);
+         end else if (controller_state == HANDLE_FIRST_DESC) begin
+            load_outhdr();            
+         end else if (controller_state == LOAD_SECOND_DESC) begin
+            load_desc(HANDLE_SECOND_DESC);
+         end else if (controller_state == HANDLE_SECOND_DESC) begin
+            buffer_addr <= desc.addr[31:0];
+            controller_state <= LOAD_THIRD_DESC;            
+         end else if (controller_state == LOAD_THIRD_DESC) begin
+            load_desc(HANDLE_THIRD_DESC);
+         end else if (controller_state == HANDLE_THIRD_DESC) begin
+            status_addr <= desc.addr[31:0];            
+            controller_state <= CONTROL_DISK;
+         end else if (controller_state == CONTROL_DISK) begin
+            // TODO: we have to use AXI Quad SPI or something like that!
+            // when completed, controller_state <= RAISE_IRQ should be executed.
          end else if (controller_state == RAISE_IRQ) begin
+            // TODO: raise IRQ
             controller_state <= WAITING_NOTIFICATION;            
          end
+      end else begin 
+         init_controller();
       end
    end
    
