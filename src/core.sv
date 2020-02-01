@@ -32,6 +32,14 @@ module core
    input wire [63:0]  time_full
    );
 
+   // internal state
+   /////////
+   (* mark_debug = "true" *) reg [31:0]          pc;
+   (* mark_debug = "true" *) instructions instr;
+   (* mark_debug = "true" *) regvpair register;
+   (* mark_debug = "true" *) cpu_mode_t cpu_mode;   
+   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
+   
    // registers
    /////////
    (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
@@ -332,15 +340,7 @@ module core
    // _time_full is given as a wire from CLINT
    wire [31:0]         _time = time_full[31:0];
    wire [31:0]         _timeh = time_full[63:32];
-   
-   // internal state
-   /////////
-   (* mark_debug = "true" *) reg [31:0]          pc;
-   (* mark_debug = "true" *) instructions instr;
-   (* mark_debug = "true" *) regvpair register;
-   (* mark_debug = "true" *) enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode;
-   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
-   
+      
    // fetch stage
    /////////
    // control flags
