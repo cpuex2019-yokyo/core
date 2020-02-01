@@ -44,32 +44,33 @@ module virtio(
               output reg        virtio_interrupt
               );
 
-   wire [31:0]                  magic_value = 32'h74726976; // 0x00
-   wire [31:0]                  version = 32'h01; // 0x04
-   wire [31:0]                  device_id = 32'h02; // 0x08
-   wire [31:0]                  vendor_id = 32'h554d4551; // 0x0c
-   wire [31:0]                  host_features; // 0x10
-   reg [31:0]                   host_features_sel; // 0x14
-   reg [31:0]                   guest_features; // 0x20
-   reg [31:0]                   guest_features_sel; // 0x24
-   reg [31:0]                   guest_page_size; //0x28
-   reg [31:0]                   queue_sel; //0x30
-   wire [31:0]                  queue_num_max; //0x34
-   reg [31:0]                   queue_num; //0x38
-   reg [31:0]                   queue_align; //0x3c
-   reg [31:0]                   queue_pfn; // 0x40
+   // TODO: set appropriate value for those registers.
+   wire [31:0]                  magic_value = 32'h74726976;
+   wire [31:0]                  version = 32'h01;
+   wire [31:0]                  device_id = 32'h02;
+   wire [31:0]                  vendor_id = 32'h554d4551;
+   wire [31:0]                  host_features = 32'h00;
+   reg [31:0]                   host_features_sel;
+   reg [31:0]                   guest_features;
+   reg [31:0]                   guest_features_sel;
+   reg [31:0]                   guest_page_size;
+   reg [31:0]                   queue_sel;
+   wire [31:0]                  queue_num_max;
+   reg [31:0]                   queue_num;
+   reg [31:0]                   queue_align;
+   reg [31:0]                   queue_pfn;
 
    // TODO: although xv6 uses legacy interface and the interface does not include QueueReady register in the MMIO model, xv6 has a macro for QueueReady.
    // It is not used in xv6, but I do not know whether it is in Linux.
    // So I have to inspect Linux src further more...
-   reg [31:0]                   queue_ready; // 0x44
+   reg [31:0]                   queue_ready;
    
-   reg [31:0]                   queue_notify; // 0x50
-   wire [31:0]                  interrupt_status; // 0x60
-   reg [31:0]                   interrupt_ack; //0x64
+   reg [31:0]                   queue_notify;
+   wire [31:0]                  interrupt_status;
+   reg [31:0]                   interrupt_ack;
    // NOTE: This register does not follow the naming convention of virtio spec.
    // This is because "state" is too ambigious ...  there are a lot of states!
-   reg [31:0]                   device_status; //0x70
+   reg [31:0]                   device_status;
 
    enum reg [3:0]               {
                                  WAITING_QUERY, 
@@ -116,7 +117,7 @@ module virtio(
 
          controller_notified <= 1'b0;        
       end
-   endtask // init
+   endtask
 
    function read_reg(input [31:0] addr);
       begin
@@ -222,13 +223,13 @@ module virtio(
    // loaded data
    VRingDesc desc;   
    OutHDR outhdr;   
-   reg [31:0] buffer_addr;   
-   reg [31:0] status_addr;
+   reg [31:0]  buffer_addr;   
+   reg [31:0]  status_addr;
    
    // on descriptor
    ///////////////////////
    
-   reg [3:0] load_outhdr_microstate;
+   reg [3:0]   load_outhdr_microstate;
    task load_desc(input [5:0] callback_state);
       begin
          if (load_desc_microstate == 0) begin
