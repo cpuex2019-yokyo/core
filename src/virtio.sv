@@ -41,7 +41,7 @@ module virtio(
 	          input wire        clk,
 	          input wire        rstn,
 
-              output reg       virtio_interrupt
+              output reg        virtio_interrupt
               );
 
    wire [31:0]                  magic_value = 32'h74726976; // 0x00
@@ -91,11 +91,13 @@ module virtio(
 
                                  // TODO: add appropriate states for disk controlling
                                  CONTROL_DISK,
-                                 
+   
                                  RAISE_IRQ                                 
                                  } controller_state;
 
-   task init;
+   reg                          controller_notified;
+   
+   task init_interface;
       begin
 		 core_arready <= 1'b1;         
 		 core_rdata <= 32'h0;
@@ -110,9 +112,9 @@ module virtio(
          mode <= 1'b0;
          addr <= 32'b0;
          wdata <= 32'b0;
-         wstrb <= 4'b0;         
+         wstrb <= 4'b0; 
 
-         virtio_interrupt <= 1'b0;         
+         controller_notified <= 1'b0;        
       end
    endtask // init
 
@@ -133,7 +135,7 @@ module virtio(
    endfunction
 
    task write_reg(input [31:0] addr, input [31:0] data);
-      begin
+      begin         
          case(addr)
            32'h14: host_features_sel <= data;
            32'h20: guest_features <= data;
@@ -143,10 +145,7 @@ module virtio(
            32'h38: queue_num <= data;
            32'h3c: queue_align <= data;
            32'h40: queue_pfn <= data;
-           32'h50: begin
-              queue_notify <= data;
-              controller_state <= START_TO_HANDLE;                            
-           end
+           32'h50: queue_notify <= data;
            32'h64: interrupt_ack <= data;
            32'h70: device_status <= data;           
          endcase
@@ -155,15 +154,12 @@ module virtio(
 
    reg [31:0] _addr;
    reg [31:0] _data;   
-   reg [3:0]  _wstrb;
-
-   wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
-   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
-   wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);   
+   reg [3:0]  _wstrb;   
    
    // this module assumes that only CPU access to this controller.
    always @(posedge clk) begin
 	  if(rstn) begin
+         
          if (interface_state == WAITING_QUERY) begin
             if(core_arvalid) begin
                core_arready <= 0;
@@ -184,6 +180,7 @@ module virtio(
                interface_state <= WAITING_BREADY;
 
                write_reg(_addr, _data);
+               controller_notified <= (_addr == 32'h50);
                core_bvalid <= 1;
                core_bresp <= 2'b0;               
             end
@@ -197,24 +194,41 @@ module virtio(
          end else if (interface_state == WAITING_BREADY) begin
             if (core_bready) begin
                core_awready <= 1;
-               
-               state <= WAITING_QUERY;               
                core_wready <= 1;
+               
+               interface_state <= WAITING_QUERY;
+               controller_notified <= 1'b0;               
+               core_bvalid <= 1'b0;               
             end       
          end
 	  end else begin
-         init();         
+         init_interface();         
       end
    end
 
 
+   // avail idx cache
    reg [31:0] avail_idx;
    reg [31:0] used_idx;
+
+   // given virtqueue 
+   wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
+   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
+   wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);
+
+   // current descriptor head
+   wire [31:0] desc_base <= desc_head + 16 * ((used_idx-1) mod queue_num);
+
+   // loaded data
+   VRingDesc desc;   
+   OutHDR outhdr;   
+   reg [31:0] buffer_addr;   
+   reg [31:0] status_addr;
    
-   VRingDesc desc;
-   // *(desc_head + 16 * (used_idx % queue_num))
-   wire [31:0] desc_base <= desc_head + 16 * ((used_idx-1) mod queue_num);   
-   reg [3:0] load_desc_microstate;   
+   // on descriptor
+   ///////////////////////
+   
+   reg [3:0] load_outhdr_microstate;
    task load_desc(input [5:0] callback_state);
       begin
          if (load_desc_microstate == 0) begin
@@ -256,8 +270,10 @@ module virtio(
       end
    endtask  
 
-   reg [3:0] load_outhdr_microstate;
-   OutHDR outhdr;   
+   // on outhdr
+   ///////////////////////
+   
+   reg [3:0]   load_desc_microstate;
    task load_outhdr;            
       begin
          if (load_outhdr_microstate == 0) begin
@@ -296,24 +312,25 @@ module virtio(
             end
          end
       end
-   endtask // load_outhdr
-
-   reg [31:0] buffer_addr;   
-   reg [31:0] status_addr;   
-     
+   endtask
+   
    task init_controller;
       begin
          avail_idx <= 32'h0;         
          used_idx <= 32'h0;
          load_desc_microstate <= 0;         
+         virtio_interrupt <= 1'b0;         
       end
-   endtask // init_controller
+   endtask
 
    
    always @(posedge clk) begin
       if(rstn) begin
          if(controller_state == WAITING_NOTIFICATION) begin
-            // Do nothing.
+            virtio_interrupt <= 1'b0;            
+            if(controller_notified) begin
+               controller_state <= START_TO_HANDLE;
+            end
          end else if (controller_state == START_TO_HANDLE) begin
             mem_request_enable <= 1;
             // *(avail_head + 2)            
@@ -329,7 +346,7 @@ module virtio(
                   used_idx <= used_idx + 1;
                   controller_state <= LOAD_FIRST_DESC;                  
                end else begin
-                  controller_state <= WAITING_NOTIFICATION;                  
+                  controller_state <= RAISE_IRQ;                  
                end
             end
          end else if (controller_state == LOAD_FIRST_DESC) begin
@@ -348,9 +365,9 @@ module virtio(
             controller_state <= CONTROL_DISK;
          end else if (controller_state == CONTROL_DISK) begin
             // TODO: we have to use AXI Quad SPI or something like that!
-            // when completed, controller_state <= RAISE_IRQ should be executed.
+            // when completed, controller_state <= START_TO_HANDLE should be executed (due to multiple req).
          end else if (controller_state == RAISE_IRQ) begin
-            // TODO: raise IRQ
+            virtio_interrupt <= 1'b1;            
             controller_state <= WAITING_NOTIFICATION;            
          end
       end else begin 
