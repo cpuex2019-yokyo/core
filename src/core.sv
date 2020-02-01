@@ -3,7 +3,7 @@
 
 module core
   (input wire clk,
-   input wire         rstn,
+   input wire         rstn, 
 
    // bus
    output wire        fetch_request_enable,
@@ -29,9 +29,23 @@ module core
    // from CLINT
    input wire         software_intr,
    input wire         timer_intr,
-   input wire [63:0]  time_full
+   input wire [63:0]  time_full,
+
+   // to MMU
+   output wire [31:0] o_satp,
+   output wire [1:0]  o_cpu_mode,
+   output wire        o_mxr,
+   output wire        o_sum
    );
 
+   // internal state
+   /////////
+   (* mark_debug = "true" *) reg [31:0]          pc;
+   (* mark_debug = "true" *) instructions instr;
+   (* mark_debug = "true" *) regvpair register;
+   (* mark_debug = "true" *) cpu_mode_t cpu_mode;   
+   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
+   
    // registers
    /////////
    (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
@@ -332,15 +346,7 @@ module core
    // _time_full is given as a wire from CLINT
    wire [31:0]         _time = time_full[31:0];
    wire [31:0]         _timeh = time_full[63:32];
-   
-   // internal state
-   /////////
-   (* mark_debug = "true" *) reg [31:0]          pc;
-   (* mark_debug = "true" *) instructions instr;
-   (* mark_debug = "true" *) regvpair register;
-   (* mark_debug = "true" *) enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode;
-   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
-   
+      
    // fetch stage
    /////////
    // control flags
@@ -765,6 +771,13 @@ module core
    /////////////////////
    // main
    /////////////////////
+
+   assign o_satp = _satp;
+   assign o_cpu_mode = cpu_mode;
+   assign o_mxr = _mstatus[19];
+   assign o_sum = _mstatus[18];
+   
+   
    initial begin
       init();
    end

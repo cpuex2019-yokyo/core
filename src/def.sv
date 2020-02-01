@@ -6,6 +6,8 @@ typedef struct {
    reg [31:0]  rs2;
 } regvpair;
 
+typedef enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode_t;
+
 parameter MEMREQ_READ = 0;
 parameter MEMREQ_WRITE = 1;
 
