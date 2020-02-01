@@ -8,4 +8,6 @@ localparam STATUS_FETATURES_OK = 32'd8;
 localparam STATUS_DRIVER_OK = 32'd4;
 localparam DEVICE_NEEDS_RESET = 32'd64;
 
+localparam QUEUE_ALIGN = 4096;
+
 `endif

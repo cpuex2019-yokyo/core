@@ -1,34 +1,47 @@
 `default_nettype none
 
 module virtio(
-	          input wire [31:0] axi_araddr,
-	          output reg        axi_arready,
-	          input wire        axi_arvalid,
-	          input wire [2:0]  axi_arprot,
+              // bus for core
+	          input wire [31:0] core_araddr,
+	          output reg        core_arready,
+	          input wire        core_arvalid,
+	          input wire [2:0]  core_arprot,
 
-	          output reg [31:0] axi_rdata,
-	          input wire        axi_rready,
-	          output reg [1:0]  axi_rresp,
-	          output reg        axi_rvalid,
+	          output reg [31:0] core_rdata,
+	          input wire        core_rready,
+	          output reg [1:0]  core_rresp,
+	          output reg        core_rvalid,
 
-	          input wire        axi_bready,
-	          output reg [1:0]  axi_bresp,
-	          output reg        axi_bvalid,
+	          input wire        core_bready,
+	          output reg [1:0]  core_bresp,
+	          output reg        core_bvalid,
 
-	          input wire [31:0] axi_awaddr,
-	          output reg        axi_awready,
-	          input wire        axi_awvalid,
-	          input wire [2:0]  axi_awprot,
+	          input wire [31:0] core_awaddr,
+	          output reg        core_awready,
+	          input wire        core_awvalid,
+	          input wire [2:0]  core_awprot,
 
-	          input wire [31:0] axi_wdata,
-	          output reg        axi_wready,
-	          input wire [3:0]  axi_wstrb,
-	          input wire        axi_wvalid,
+	          input wire [31:0] core_wdata,
+	          output reg        core_wready,
+	          input wire [3:0]  core_wstrb,
+	          input wire        core_wvalid,
 
+              // bus
+              output reg        request_enable,
+              output reg        mode,
+              output reg [31:0] addr,
+              output reg [31:0] wdata,
+              output reg [3:0]  wstrb, 
+              input wire        response_enable,
+              input wire [31:0] data,
+
+              // general
 	          input wire        clk,
-	          input wire        rstn
+	          input wire        rstn,
+
+              output reg       virtio_interrupt
               );
-   
+
    wire [31:0]                  magic_value = 32'h74726976; // 0x00
    wire [31:0]                  version = 32'h01; // 0x04
    wire [31:0]                  device_id = 32'h02; // 0x08
@@ -52,27 +65,47 @@ module virtio(
    reg [31:0]                   queue_notify; // 0x50
    wire [31:0]                  interrupt_status; // 0x60
    reg [31:0]                   interrupt_ack; //0x64
-   // This register does not follow the naming convention of virtio spec.
+   // NOTE: This register does not follow the naming convention of virtio spec.
    // This is because "state" is too ambigious ...  there are a lot of states!
    reg [31:0]                   device_status; //0x70
 
-   enum reg [3:0]               {WAITING_QUERY, WAITING_RREADY, WAITING_BREADY} interface_state;
-   enum reg [5:0]               { HOGE, FOOBAR } controller_state;   
+   enum reg [3:0]               {
+                                 WAITING_QUERY, 
+                                 WAITING_RREADY, 
+                                 WAITING_BREADY
+                                 } interface_state;
+   
+   enum reg [5:0]               {
+                                 WAITING_NOTIFICATION, 
+                                 COLLECT_DESCRIPTOR,
+                                 WAITING_DISC,
+                                 RAISE_IRQ                                 
+                                 } controller_state;
+
+   enum reg [5:0]               {
+                                 
+                                 } collecting_state;
+   
+
 
    task init;
       begin
-		 axi_arready <= 1'b1;
-         
-		 axi_rdata <= 32'h0;
-		 axi_rresp <= 2'b00;
-		 axi_rvalid <= 1'b0;
-         
-		 axi_bresp <= 2'b00;
-		 axi_bvalid <= 1'b0;
-         
-		 axi_awready <= 1'b1;
-         
-		 axi_wready <= 1'b1;         
+		 core_arready <= 1'b1;         
+		 core_rdata <= 32'h0;
+		 core_rresp <= 2'b00;
+		 core_rvalid <= 1'b0;         
+		 core_bresp <= 2'b00;
+		 core_bvalid <= 1'b0;         
+		 core_awready <= 1'b1;         
+		 core_wready <= 1'b1;
+
+         request_enable <= 1'b0;
+         mode <= 1'b0;
+         addr <= 32'b0;
+         wdata <= 32'b0;
+         wstrb <= 4'b0;         
+
+         virtio_interrupt <= 1'b0;         
       end
    endtask // init
 
@@ -102,8 +135,12 @@ module virtio(
            32'h30: queue_sel <= data;
            32'h38: queue_num <= data;
            32'h3c: queue_align <= data;
-           32'h40: queue_pfm <= data;
-           32'h50: queue_notify <= data; // TODO: invoke the FSM
+           32'h40: queue_pfn <= data;
+           32'h50: begin
+              queue_notify <= data;
+              controller_state <= COLLECT_DESCRIPTOR;
+              
+           end
            32'h64: interrupt_ack <= data;
            32'h70: device_status <= data;           
          endcase
@@ -113,46 +150,50 @@ module virtio(
    reg [31:0] _addr;
    reg [31:0] _data;   
    reg [3:0]  _wstrb;
+
+   wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
+   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
+   wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);   
    
    // this module assumes that only CPU access to this controller.
    always @(posedge clk) begin
 	  if(rstn) begin
          if (interface_state == WAITING_QUERY) begin
-            if(axi_arvalid) begin
-               axi_arready <= 0;
+            if(core_arvalid) begin
+               core_arready <= 0;
                
                interface_state <= WAITING_RREADY;               
-               axi_rvalid <= 1;
-               axi_rdata <= read_reg(axi_araddr);               
-            end else if (axi_awvalid) begin
-               axi_awready <= 0;
+               core_rvalid <= 1;
+               core_rdata <= read_reg(core_araddr);               
+            end else if (core_awvalid) begin
+               core_awready <= 0;
                
-               _addr <= axi_awaddr;               
-            end else if (axi_wvalid) begin
-               axi_wready <= 0;
+               _addr <= core_awaddr;               
+            end else if (core_wvalid) begin
+               core_wready <= 0;
                
-               _addr <= axi_wdata;
-               _wstrb <= axi_wstrb;               
-            end else if (!axi_awready && !axi_wready) begin
+               _addr <= core_wdata;
+               _wstrb <= core_wstrb;               
+            end else if (!core_awready && !core_wready) begin
                interface_state <= WAITING_BREADY;
 
                write_reg(_addr, _data);
-               axi_bvalid <= 1;
-               axi_bresp <= 2'b0;               
+               core_bvalid <= 1;
+               core_bresp <= 2'b0;               
             end
          end else if (interface_state == WAITING_RREADY) begin
-            if(axi_rready) begin
-               axi_arready <= 1;
+            if(core_rready) begin
+               core_arready <= 1;
                
                interface_state <= WAITING_QUERY;        
-               axi_rvalid <= 0;
+               core_rvalid <= 0;
             end        
          end else if (interface_state == WAITING_BREADY) begin
-            if (axi_bready) begin
-               axi_awready <= 1;
+            if (core_bready) begin
+               core_awready <= 1;
                
                state <= WAITING_QUERY;               
-               axi_wready <= 1;
+               core_wready <= 1;
             end       
          end
 	  end else begin
@@ -161,6 +202,14 @@ module virtio(
    end
 
    always @(posedge clk) begin
+      if(rstn) begin
+         if(controller_state == WAITING_NOTIFICATION) begin
+            // Do nothing.
+         end else if (controller_state == COLLECT_DESCRIPTOR) begin
+         end else if (controller_state == RAISE_IRQ) begin
+            controller_state <= WAITING_NOTIFICATION;            
+         end
+      end
    end
    
 endmodule
