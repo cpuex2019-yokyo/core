@@ -82,7 +82,6 @@ module virtio(
                                  WAITING_NOTIFICATION,
                                  START_TO_HANDLE,
                                  WAITING_MEM_AVAIL_IDX,
-                                 WAITING_MEM_AVAIL_IDX,
                                  LOAD_FIRST_DESC,
                                  HANDLE_FIRST_DESC,
                                  LOAD_SECOND_DESC,
@@ -109,11 +108,11 @@ module virtio(
 		 core_awready <= 1'b1;         
 		 core_wready <= 1'b1;
 
-         request_enable <= 1'b0;
-         mode <= 1'b0;
-         addr <= 32'b0;
-         wdata <= 32'b0;
-         wstrb <= 4'b0; 
+         mem_request_enable <= 1'b0;
+         mem_mode <= 1'b0;
+         mem_addr <= 32'b0;
+         mem_wdata <= 32'b0;
+         mem_wstrb <= 4'b0; 
 
          controller_notified <= 1'b0;        
       end
@@ -218,7 +217,7 @@ module virtio(
    wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);
 
    // current descriptor head
-   wire [31:0] desc_base <= desc_head + 16 * ((used_idx-1) mod queue_num);
+   wire [31:0] desc_base = desc_head + 16 * ((used_idx-1) % queue_num);
 
    // loaded data
    VRingDesc desc;   
@@ -229,7 +228,7 @@ module virtio(
    // on descriptor
    ///////////////////////
    
-   reg [3:0]   load_outhdr_microstate;
+   reg [3:0]   load_desc_microstate;
    task load_desc(input [5:0] callback_state);
       begin
          if (load_desc_microstate == 0) begin
@@ -243,22 +242,22 @@ module virtio(
                load_desc_microstate <= 2;
                desc.addr[31:0] <= mem_data;               
                mem_request_enable <= 1;
-               mem_mode <= MEMREQ_MODE;
+               mem_mode <= MEMREQ_READ;
                mem_addr <= desc_base + 8;               
             end else begin
                mem_request_enable <= 0;            
             end
-         end else if (microstate == 2) begin
+         end else if (load_desc_microstate == 2) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 3;
                desc.len <= mem_data;               
                mem_request_enable <= 1;
-               mem_mode <= MEMREQ_MODE;
+               mem_mode <= MEMREQ_READ;
                mem_addr <= desc_base + 12;               
             end else begin
                mem_request_enable <= 0;            
             end
-         end else if (microstate == 3) begin
+         end else if (load_desc_microstate == 3) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 0;
                desc.flags <= mem_data[31:16];
@@ -274,7 +273,7 @@ module virtio(
    // on outhdr
    ///////////////////////
    
-   reg [3:0]   load_desc_microstate;
+   reg [3:0]   load_outhdr_microstate;
    task load_outhdr;            
       begin
          if (load_outhdr_microstate == 0) begin
@@ -288,7 +287,7 @@ module virtio(
                load_outhdr_microstate <= 2;
                outhdr.btype[31:0] <= mem_data;               
                mem_request_enable <= 1;
-               mem_mode <= MEMREQ_MODE;
+               mem_mode <= MEMREQ_READ;
                mem_addr <= desc.addr[31:0] + 8;
             end else begin
                mem_request_enable <= 0;            
@@ -298,7 +297,7 @@ module virtio(
                load_outhdr_microstate <= 3;
                outhdr.sector[63:32] <= mem_data;               
                mem_request_enable <= 1;
-               mem_mode <= MEMREQ_MODE;
+               mem_mode <= MEMREQ_READ;
                mem_addr <= desc.addr[31:0] + 12;
             end else begin
                mem_request_enable <= 0;            
@@ -340,7 +339,7 @@ module virtio(
             
             controller_state <= WAITING_MEM_AVAIL_IDX;            
          end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
-            request_enable <= 0;
+            mem_request_enable <= 0;
             if (mem_response_enable) begin
                avail_idx <= mem_data;
                if (used_idx != avail_idx) begin
