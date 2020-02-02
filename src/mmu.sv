@@ -35,8 +35,7 @@ module mmu(
            output wire [31:0] req_wdata,
            output wire [3:0]  req_wstrb,
            input wire         response_enable,
-           input wire [31:0]  resp_data,
-
+           input wire [31:0]  resp_data
            );
    
 
