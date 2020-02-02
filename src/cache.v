@@ -1,81 +1,111 @@
 `default_nettype none
 
-module cache_wrapper(
-                     input wire         clk,
-                     input wire         rstn,
+module cache_wrapper (
+                      input              clk,
+                      input              rstn,
 
-                     input wire         request_enable,
-                     input wire         req_mode,
-                     input wire [31:0]  req_addr,
-                     input wire [31:0]  req_wdata,
-                     input wire [3:0]   req_wstrb,
-                     output wire        response_enable,
-                     output wire [31:0] resp_data,
+                      // master (to)
+                      output wire [31:0] m_araddr,
+                      input wire         m_arready,
+                      output wire        m_arvalid,
+                      output wire [2:0]  m_arprot,
 
-                     // address read channel
-                     output wire [31:0] axi_araddr,
-                     input wire         axi_arready,
-                     output wire        axi_arvalid,
-                     output wire [2:0]  axi_arprot,
+                      output wire        m_bready,
+                      input wire [1:0]   m_bresp,
+                      input wire         m_bvalid,
 
-                     // response channel
-                     output wire        axi_bready,
-                     input wire [1:0]   axi_bresp,
-                     input wire         axi_bvalid,
+                      input wire [31:0]  m_rdata,
+                      output wire        m_rready,
+                      input wire [1:0]   m_rresp,
+                      input wire         m_rvalid,
 
-                     // read data channel
-                     input wire [31:0]  axi_rdata,
-                     output wire        axi_rready,
-                     input wire [1:0]   axi_rresp,
-                     input wire         axi_rvalid,
+                      output wire [31:0] m_awaddr,
+                      input wire         m_awready,
+                      output wire        m_awvalid,
+                      output wire [2:0]  m_awprot,
 
-                     // address write channel
-                     output wire [31:0] axi_awaddr,
-                     input wire         axi_awready,
-                     output wire        axi_awvalid,
-                     output wire [2:0]  axi_awprot,
+                      output wire [31:0] m_wdata,
+                      input wire         m_wready,
+                      output wire [3:0]  m_wstrb,
+                      output wire        m_wvalid,
 
-                     // data write channel
-                     output wire [31:0] axi_wdata,
-                     input wire         axi_wready,
-                     output wire [3:0]  axi_wstrb,
-                     output wire        axi_wvalid);
+                      // slave (from)
+	                  input wire [31:0]  s_araddr,
+	                  output wire        s_arready,
+	                  input wire         s_arvalid,
+	                  input wire [2:0]   s_arprot, 
+
+	                  input wire         s_bready,
+	                  output wire [1:0]  s_bresp,
+	                  output wire        s_bvalid,
+
+	                  output wire [31:0] s_rdata,
+	                  input wire         s_rready,
+	                  output wire [1:0]  s_rresp,
+	                  output wire        s_rvalid,
+
+	                  input wire [31:0]  s_awaddr,
+	                  output wire        s_awready,
+	                  input wire         s_awvalid,
+	                  input wire [2:0]   s_awprot, 
+
+	                  input wire [31:0]  s_wdata,
+	                  output wire        s_wready,
+	                  input wire [3:0]   s_wstrb,
+	                  input wire         s_wvalid);
 
    cache _cache(
                 .clk(clk),
                 .rstn(rstn),
+      
+                .m_araddr(m_araddr),
+                .m_arready(m_arready),
+                .m_arvalid(m_arvalid),
+                .m_arprot(m_arprot),
 
-                .request_enable(request_enable),
-                .req_mode(req_mode),
-                .req_addr(req_addr),
-                .req_wdata(req_wdata),
-                .req_wstrb(req_wstrb),
-                .response_enable(response_enable),
-                .resp_data(resp_data),
+                .m_bready(m_bready),
+                .m_bresp(m_bresp),
+                .m_bvalid(m_bvalid),
 
-                .axi_araddr(axi_araddr),
-                .axi_arready(axi_arready),
-                .axi_arvalid(axi_arvalid),
-                .axi_arprot(axi_arprot),
+                .m_rdata(m_rdata),
+                .m_rready(m_rready),
+                .m_rresp(m_rresp),
+                .m_rvalid(m_rvalid),
 
-                .axi_bready(axi_bready),
-                .axi_bresp(axi_bresp),
-                .axi_bvalid(axi_bvalid),
+                .m_awaddr(m_awaddr),
+                .m_awready(m_awready),
+                .m_awvalid(m_awvalid),
+                .m_awprot(m_awprot),
 
-                .axi_rdata(axi_rdata),
-                .axi_rready(axi_rready),
-                .axi_rresp(axi_rresp),
-                .axi_rvalid(axi_rvalid),
+                .m_wdata(m_wdata),
+                .m_wready(m_wready),
+                .m_wstrb(m_wstrb),
+                .m_wvalid(m_wvalid),
+      
+                .s_araddr(s_araddr),
+                .s_arready(s_arready),
+                .s_arvalid(s_arvalid),
+                .s_arprot(s_arprot),
 
-                .axi_awaddr(axi_awaddr),
-                .axi_awready(axi_awready),
-                .axi_awvalid(axi_awvalid),
-                .axi_awprot(axi_awprot),
+                .s_bready(s_bready),
+                .s_bresp(s_bresp),
+                .s_bvalid(s_bvalid),
 
-                .axi_wdata(axi_wdata),
-                .axi_wready(axi_wready),
-                .axi_wstrb(axi_wstrb),
-                .axi_wvalid(axi_wvalid));
+                .s_rdata(s_rdata),
+                .s_rready(s_rready),
+                .s_rresp(s_rresp),
+                .s_rvalid(s_rvalid),
+
+                .s_awaddr(s_awaddr),
+                .s_awready(s_awready),
+                .s_awvalid(s_awvalid),
+                .s_awprot(s_awprot),
+
+                .s_wdata(s_wdata),
+                .s_wready(s_wready),
+                .s_wstrb(s_wstrb),
+                .s_wvalid(s_wvalid));
    
 endmodule
+
 `default_nettype wire

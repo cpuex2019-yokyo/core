@@ -1,145 +1,85 @@
 `default_nettype none
-`include "def.sv"
 
-module cache(
-           input wire        clk,
-           input wire        rstn,
+// TODO
+// implement! implement!
+// note that you need to replace `output wire` to `output reg` in actual imp.
+module cache (
+              input wire         clk,
+              input wire         rstn,
+              
+              // master (to)
+              output wire [31:0] m_araddr,
+              input wire         m_arready,
+              output wire        m_arvalid,
+              output wire [2:0]  m_arprot,
 
-           input wire        request_enable,
-           input wire        req_mode,
-           input wire [31:0] req_addr,
-           input wire [31:0] req_wdata,
-           input wire [3:0]  req_wstrb,
-           output reg        response_enable,
-           output reg [31:0] resp_data,
+              output wire        m_bready,
+              input wire [1:0]   m_bresp,
+              input wire         m_bvalid,
 
-           // address read channel
-           output reg [31:0] axi_araddr,
-           input wire        axi_arready,
-           output reg        axi_arvalid,
-           output reg [2:0]  axi_arprot,
+              input wire [31:0]  m_rdata,
+              output wire        m_rready,
+              input wire [1:0]   m_rresp,
+              input wire         m_rvalid,
 
-           // response channel
-           output reg        axi_bready,
-           input wire [1:0]  axi_bresp,
-           input wire        axi_bvalid,
+              output wire [31:0] m_awaddr,
+              input wire         m_awready,
+              output wire        m_awvalid,
+              output wire [2:0]  m_awprot,
 
-           // read data channel
-           input wire [31:0] axi_rdata,
-           output reg        axi_rready,
-           input wire [1:0]  axi_rresp,
-           input wire        axi_rvalid,
+              output wire [31:0] m_wdata,
+              input wire         m_wready,
+              output wire [3:0]  m_wstrb,
+              output wire        m_wvalid,
 
-           // address write channel
-           output reg [31:0] axi_awaddr,
-           input wire        axi_awready,
-           output reg        axi_awvalid,
-           output reg [2:0]  axi_awprot,
+              // slave (from)
+	          input wire [31:0]  s_araddr,
+	          output wire        s_arready,
+	          input wire         s_arvalid,
+	          input wire [2:0]   s_arprot, 
 
-           // data write channel
-           output reg [31:0] axi_wdata,
-           input wire        axi_wready,
-           output reg [3:0]  axi_wstrb,
-           output reg        axi_wvalid);
+	          input wire         s_bready,
+	          output wire [1:0]  s_bresp,
+	          output wire        s_bvalid,
 
+	          output wire [31:0] s_rdata,
+	          input wire         s_rready,
+	          output wire [1:0]  s_rresp,
+	          output wire        s_rvalid,
 
-   typedef enum reg [3:0]    {
-                              WAITING_REQUEST, 
-                              WAITING_MEM_RREADY, 
-                              WAITING_MEM_WREADY, 
-                              WAITING_MEM_RVALID, 
-                              WAITING_MEM_BVALID, 
-                              WAITING_RECEIVE
-                              } memistate_t;   
-   (* mark_debug = "true" *) memistate_t                 state;
+	          input wire [31:0]  s_awaddr,
+	          output wire        s_awready,
+	          input wire         s_awvalid,
+	          input wire [2:0]   s_awprot, 
 
-   task init;
-      begin
-         response_enable <= 0;
-         resp_data <= 32'b0;
-         
-         axi_araddr <= 32'b0;
-         axi_arvalid <= 0;
-         axi_arprot <= 2'b0;
-         
-         axi_bready <= 0;
-         
-         axi_rready <= 0;
-         
-         axi_awaddr <= 32'b0;
-         axi_awvalid <= 0;
-         axi_awprot <= 2'b0;
-         
-         axi_wdata <= 32'b0;
-         axi_wstrb <= 4'b0;
-         axi_wvalid <= 0;
-         
-         state <= WAITING_REQUEST;
-      end
-   endtask
+	          input wire [31:0]  s_wdata,
+	          output wire        s_wready,
+	          input wire [3:0]   s_wstrb,
+	          input wire         s_wvalid);
+   
+   assign m_araddr = s_araddr;   
+   assign s_arready = m_arready;
+   assign m_arvalid = s_arvalid;
+   assign m_arprot = s_arprot;
 
-   initial begin
-      init();
-   end
+   assign m_bready = s_bready;
+   assign s_bresp = m_bresp;
+   assign s_bvalid = m_bvalid;
 
-   always @(posedge clk) begin
-      if(rstn) begin
-         if (state == WAITING_REQUEST) begin
-            if (request_enable) begin
-               if (req_mode == MEMREQ_READ) begin
-                  axi_araddr <= req_addr;
-                  axi_arprot <= 3'b000;
-                  axi_arvalid <= 1;
-                  state <= WAITING_MEM_RREADY;
-                  // TODO: match with cache                  
-               end else begin
-                  axi_awaddr <= req_addr;
-                  axi_awprot <= 3'b000;
-                  axi_awvalid <= 1;
-                  axi_wstrb <= req_wstrb;
-                  axi_wdata <= req_wdata;
-                  axi_wvalid <= 1;
-                  state <= WAITING_MEM_WREADY;
-                  // TODO: writethrough, hoge
-               end
-            end
-         end else if (state == WAITING_MEM_RREADY) begin
-            if (axi_arready) begin
-               axi_arvalid <= 0;
-               axi_rready <= 1;
-               state <= WAITING_MEM_RVALID;
-            end
-         end else if (state == WAITING_MEM_RVALID) begin
-            if (axi_rvalid) begin
-               state <= WAITING_RECEIVE;
-               axi_rready <= 0;
-               resp_data <= axi_rdata;
-               response_enable <= 1;
-            end
-         end else if (state == WAITING_MEM_WREADY) begin
-            if(axi_awready) begin
-               axi_awvalid <= 0;
-            end
-            if(axi_wready) begin
-               axi_wvalid <= 0;
-            end
-            if(!axi_awvalid && !axi_wvalid) begin
-               axi_bready <= 1;
-               state <= WAITING_MEM_BVALID;
-            end
-         end else if (state == WAITING_MEM_BVALID) begin
-            if (axi_bvalid) begin
-               axi_bready <= 0;
-               response_enable <= 1;
-               state <= WAITING_RECEIVE;              
-            end
-         end else if (state == WAITING_RECEIVE) begin
-            response_enable <= 0;
-            state <= WAITING_REQUEST;
-         end
-      end else begin
-         init();
-      end
-   end
+   assign s_rdata = m_rdata;
+   assign m_rready = s_rready;
+   assign s_rresp = m_rresp;
+   assign s_rvalid = m_rvalid;
+   
+   assign m_awaddr = s_awaddr;   
+   assign s_awready = m_awready;
+   assign m_awvalid = s_awvalid;
+   assign m_awprot = s_awprot;
+
+   assign m_wdata = s_wdata;
+   assign s_wready = m_wready;
+   assign m_wstrb = s_wstrb;
+   assign m_wvalid = s_wvalid;   
+   
 endmodule
 `default_nettype wire
