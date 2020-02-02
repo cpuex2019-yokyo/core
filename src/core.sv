@@ -64,51 +64,6 @@ module core
 
                         .register(register_d_out));
    
-   // interrupts
-   /////////
-   wire               is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
-                      || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
-                      || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
-                          && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
-   task update_pending_bits;
-      begin
-         mip <= mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
-      end
-   endtask
-   
-   reg [4:0]         exception_number;   
-   reg [31:0]        exception_tval;        
-   task raise_illegal_instruction(input [31:0] _tval);
-      begin
-         exception_number <= 5'd2;         
-         exception_tval <= _tval;
-      end
-   endtask
-   
-   task raise_instruction_adress_misaligned(input [31:0] _tval);
-      begin
-         exception_number <= 5'd0;         
-         exception_tval <= _tval;
-      end
-   endtask // raise_instruction_adress_misaligned
-
-   task raise_ecall;      
-      begin
-         exception_number <= cpu_mode == CPU_M? 5'd11:
-                             cpu_mode == CPU_S? 5'd9:
-                             cpu_mode == CPU_U? 5'd8:
-                             5'd16;
-         exception_tval <= 32'd0; // NOTE: is it okay?         
-      end
-   endtask
-
-   task raise_ebreak;      
-      begin
-         exception_number <= 5'd3;         
-         exception_tval <= 32'd0; // NOTE: is it okay?         
-      end
-   endtask
-   
    // csrs
    /////////
    wire [31:0]        _misa = {2'b01, 4'b0, 26'b00000101000001000100000001};   
@@ -152,7 +107,7 @@ module core
    wire [31:0]        intr_mask = {20'b0, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 3'b0};
    task write_mip (input [31:0] value);
       begin
-         mip <= (value & (~intr_mask)) | ({20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0} & intr_mask);
+         _mip <= (value & (~intr_mask)) | ({20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0} & intr_mask);
       end
    endtask
    
@@ -346,7 +301,52 @@ module core
    // _time_full is given as a wire from CLINT
    wire [31:0]         _time = time_full[31:0];
    wire [31:0]         _timeh = time_full[63:32];
-      
+   
+   // interrupts
+   /////////
+   wire               is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
+                      || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
+                      || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
+                          && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
+   task update_pending_bits;
+      begin
+         _mip <= _mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
+      end
+   endtask
+   
+   reg [4:0]         exception_number;   
+   reg [31:0]        exception_tval;        
+   task raise_illegal_instruction(input [31:0] _tval);
+      begin
+         exception_number <= 5'd2;         
+         exception_tval <= _tval;
+      end
+   endtask
+   
+   task raise_instruction_adress_misaligned(input [31:0] _tval);
+      begin
+         exception_number <= 5'd0;         
+         exception_tval <= _tval;
+      end
+   endtask // raise_instruction_adress_misaligned
+
+   task raise_ecall;      
+      begin
+         exception_number <= cpu_mode == CPU_M? 5'd11:
+                             cpu_mode == CPU_S? 5'd9:
+                             cpu_mode == CPU_U? 5'd8:
+                             5'd16;
+         exception_tval <= 32'd0; // NOTE: is it okay?         
+      end
+   endtask
+
+   task raise_ebreak;      
+      begin
+         exception_number <= 5'd3;         
+         exception_tval <= 32'd0; // NOTE: is it okay?         
+      end
+   endtask
+         
    // fetch stage
    /////////
    // control flags
@@ -524,7 +524,7 @@ module core
          _mcause <= 32'b0;         
          _mtval <= 32'b0;         
          _mip <= 32'b0;         
-         _pmpcfg <= 128b'b0;         
+         _pmpcfg <= 128'b0;         
          _pmpaddr[0] <= 32'b0;         
          _pmpaddr[1] <= 32'b0;         
          _pmpaddr[2] <= 32'b0;         
@@ -573,7 +573,7 @@ module core
       end
    endtask
 
-   task set_epc(input [31:0] value);
+   task set_epc(input  [1:0] next_cpu_mode, input [31:0] value);
       begin
          if (next_cpu_mode == CPU_M) begin
             write_mepc(value);
@@ -583,14 +583,16 @@ module core
       end
    endtask
 
-   task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec) begin
+   task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec);
+    begin
       if (next_cpu_mode == CPU_M) begin
          pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
-               _mtvec + 4 * _vec;
+               _mtvec + 4 * vec;
       end else if (next_cpu_mode == CPU_S) begin
-         pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _setvec:
-               _stvec + 4 * _vec;         
-      end      
+         pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _stvec:
+               _stvec + 4 * vec;         
+      end
+     end  
    endtask
    
    // here we assume that this function will used in the decode phase

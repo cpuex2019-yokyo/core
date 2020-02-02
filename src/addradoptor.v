@@ -1,7 +1,7 @@
 `default_nettype none
 module adoptor #(
-                 parameter OFFSET = 0;
-                 parameter LEFT_SHIFT = 0;                 
+                 parameter OFFSET = 0,
+                 parameter LEFT_SHIFT = 0                 
                  ) (
                     // master (to)
                     output wire [31:0] m_araddr,

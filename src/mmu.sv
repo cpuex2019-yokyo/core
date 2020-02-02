@@ -29,11 +29,11 @@ module mmu(
            output reg [4:0]   exception_vec,
            output reg         page_fault, 
 
-           output wire        request_enable,
-           output wire        req_mode,
-           output wire [31:0] req_addr,
-           output wire [31:0] req_wdata,
-           output wire [3:0]  req_wstrb,
+           output reg        request_enable,
+           output reg        req_mode,
+           output reg [31:0] req_addr,
+           output reg [31:0] req_wdata,
+           output reg [3:0]  req_wstrb,
            input wire         response_enable,
            input wire [31:0]  resp_data
            );
@@ -54,7 +54,7 @@ module mmu(
 
    // 0 for Bare
    // 1 for Sv32
-   wire [1] paging_mode = satp[31];   
+   wire paging_mode = satp[31];   
    wire [21:0] satp_ppn = satp[21:0];
    
    reg [31:0]                 _vaddr;   
@@ -100,7 +100,7 @@ module mmu(
    // return: 22 bit
    function ppn(input [31:0] addr);
       begin
-         ppn0 = addr[31:10];
+         ppn = addr[31:10];
       end
    endfunction // ppn0
 
@@ -110,7 +110,7 @@ module mmu(
          exception_vec <= _mode == MEMREQ_READ? 5'd13: // load page fault
                           5'd15; // store/amo page fault                             
          state <= WAITING_RECEIVE;
-         if (cause == CAUSE_FETCH) begin
+         if (operation_cause == CAUSE_FETCH) begin
             fetch_response_enable <= 1'b1;               
             fresp_data <= resp_data;
          end else begin
@@ -167,9 +167,7 @@ module mmu(
          _mode <= 1'b0;
          _wdata <= 32'b0;
          _wstrb <= 32'b0;
-
-         _vaddr <= 32'b0;
-         pte <= 32'b0;         
+         _vaddr <= 32'b0;     
          
          state <= WAITING_REQUEST;
       end
@@ -189,7 +187,7 @@ module mmu(
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
             raise_pagefault_exception();            
          end else begin
-            if (pte[6] == 0 || (cause == CAUSE_MEM && _mode == MEMREQ_WRITE && pte[7])) begin
+            if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && pte[7])) begin
                raise_pagefault_exception();            
             end else begin
                state <= WAITING_RESPONSE;
@@ -228,7 +226,7 @@ module mmu(
                req_mode <= MEMREQ_READ;
                req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
                
-               cause <= CAUSE_FETCH;            
+               operation_cause <= CAUSE_FETCH;            
                _vaddr <= freq_addr;
                _mode <= freq_mode;
                _wdata <= freq_wdata;
@@ -252,7 +250,7 @@ module mmu(
                req_mode <= MEMREQ_READ;
                req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
                
-               cause <= CAUSE_MEM;            
+               operation_cause <= CAUSE_MEM;            
                _vaddr <= mreq_addr;
                _mode <= mreq_mode;
                _wdata <= mreq_wdata;
@@ -270,7 +268,7 @@ module mmu(
                   state <= FETCHING_SECOND_PTE;                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
-                  req_addr <= {(ppn(satp))[19:0], 12'b0} + vpn0(_vaddr) * 4;
+                  req_addr <= {{{ppn(satp)}[19:0]}, 12'b0} + vpn0(_vaddr) * 4;
                end
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin
@@ -286,7 +284,7 @@ module mmu(
             end
          end if (state == WAITING_RESPONSE && response_enable) begin
             state <= WAITING_RECEIVE;            
-            if (cause == CAUSE_FETCH) begin
+            if (operation_cause == CAUSE_FETCH) begin
                fetch_response_enable <= 1'b1;               
                fresp_data <= resp_data;
             end else begin
@@ -295,7 +293,7 @@ module mmu(
             end
          end if (state == WAITING_RECEIVE) begin
             state <= WAITING_REQUEST;            
-            if (cause == CAUSE_FETCH) begin
+            if (operation_cause == CAUSE_FETCH) begin
                fetch_response_enable <= 1'b0;               
             end else begin
                mem_response_enable <= 1'b0;               
