@@ -3,6 +3,9 @@
 `include "virtio_params.sv"
 
 module virtio(
+	          input wire        clk,
+	          input wire        rstn,
+              
               // bus for core
 	          input wire [31:0] core_araddr,
 	          output reg        core_arready,
@@ -38,9 +41,6 @@ module virtio(
               input wire [31:0] mem_data,
 
               // general
-	          input wire        clk,
-	          input wire        rstn,
-
               output reg        virtio_interrupt
               );
 

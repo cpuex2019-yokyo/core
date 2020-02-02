@@ -1,45 +1,45 @@
 `default_nettype none
 
 module cache_wrapper(
-                     input wire        clk,
-                     input wire        rstn,
+                     input wire         clk,
+                     input wire         rstn,
 
-                     input wire        request_enable,
-                     input wire        req_mode,
-                     input wire [31:0] req_addr,
-                     input wire [31:0] req_wdata,
-                     input wire [3:0]  req_wstrb,
-                     output reg        response_enable,
-                     output reg [31:0] resp_data,
+                     input wire         request_enable,
+                     input wire         req_mode,
+                     input wire [31:0]  req_addr,
+                     input wire [31:0]  req_wdata,
+                     input wire [3:0]   req_wstrb,
+                     output wire        response_enable,
+                     output wire [31:0] resp_data,
 
                      // address read channel
-                     output reg [31:0] axi_araddr,
-                     input wire        axi_arready,
-                     output reg        axi_arvalid,
-                     output reg [2:0]  axi_arprot,
+                     output wire [31:0] axi_araddr,
+                     input wire         axi_arready,
+                     output wire        axi_arvalid,
+                     output wire [2:0]  axi_arprot,
 
                      // response channel
-                     output reg        axi_bready,
-                     input wire [1:0]  axi_bresp,
-                     input wire        axi_bvalid,
+                     output wire        axi_bready,
+                     input wire [1:0]   axi_bresp,
+                     input wire         axi_bvalid,
 
                      // read data channel
-                     input wire [31:0] axi_rdata,
-                     output reg        axi_rready,
-                     input wire [1:0]  axi_rresp,
-                     input wire        axi_rvalid,
+                     input wire [31:0]  axi_rdata,
+                     output wire        axi_rready,
+                     input wire [1:0]   axi_rresp,
+                     input wire         axi_rvalid,
 
                      // address write channel
-                     output reg [31:0] axi_awaddr,
-                     input wire        axi_awready,
-                     output reg        axi_awvalid,
-                     output reg [2:0]  axi_awprot,
+                     output wire [31:0] axi_awaddr,
+                     input wire         axi_awready,
+                     output wire        axi_awvalid,
+                     output wire [2:0]  axi_awprot,
 
                      // data write channel
-                     output reg [31:0] axi_wdata,
-                     input wire        axi_wready,
-                     output reg [3:0]  axi_wstrb,
-                     output reg        axi_wvalid);
+                     output wire [31:0] axi_wdata,
+                     input wire         axi_wready,
+                     output wire [3:0]  axi_wstrb,
+                     output wire        axi_wvalid);
 
    cache _cache(
                 .clk(clk),
