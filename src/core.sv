@@ -304,10 +304,10 @@ module core
    
    // interrupts
    /////////
-   wire               is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
-                      || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
-                      || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
-                          && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
+   wire                is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
+                       || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
+                       || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
+                           && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
    task update_pending_bits;
       begin
          _mip <= _mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
@@ -346,7 +346,7 @@ module core
          exception_tval <= 32'd0; // NOTE: is it okay?         
       end
    endtask
-         
+   
    // fetch stage
    /////////
    // control flags
@@ -584,15 +584,15 @@ module core
    endtask
 
    task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec);
-    begin
-      if (next_cpu_mode == CPU_M) begin
-         pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
-               _mtvec + 4 * vec;
-      end else if (next_cpu_mode == CPU_S) begin
-         pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _stvec:
-               _stvec + 4 * vec;         
-      end
-     end  
+      begin
+         if (next_cpu_mode == CPU_M) begin
+            pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
+                  _mtvec + 4 * vec;
+         end else if (next_cpu_mode == CPU_S) begin
+            pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _stvec:
+                  _stvec + 4 * vec;         
+         end
+      end  
    endtask
    
    // here we assume that this function will used in the decode phase
@@ -794,7 +794,7 @@ module core
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
             register <= register_d_out;
-               
+            
             if (instr_d_out.csrop) begin
                state <= EXEC_PRIV;           
                {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                            
@@ -931,7 +931,7 @@ module core
                // mstatus.mie <= mstatus.mpie;
                // mstatus.mpie <= 1;
                // mstatus.mpp <= 0;
-               cpu_mode <= _mstatus_mpp;               
+               cpu_mode <= wire2cpumode(_mstatus_mpp);               
                _mstatus <= {_mstatus[31:13], 2'b0, _mstatus[10:8], 1'b1, _mstatus[6:4], _mstatus_mpie, _mstatus[2:0]};               
             end else if (instr.sret) begin
                // trap by instruction
@@ -939,7 +939,7 @@ module core
                // mstatus.sie <= mstatus.spie;
                // mstatus.spie <= 1;
                // mstatus.spp <= 0;
-               cpu_mode <= _mstatus_spp;               
+               cpu_mode <= wire2cpumode(_mstatus_spp);               
                _mstatus <= {_mstatus[31:9], 1'b0, _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};               
             end else if (is_interrupted) begin
                // trap by interrupt
@@ -973,11 +973,10 @@ module core
          end else begin
             // In the next clock after enabling *_enabled, we have to pull down them to zero.
             clear_enabled();
-         end
-      end            
-   end else begin
-      init();
+         end      
+      end else begin
+         init();
+      end
    end
-end
-      endmodule
+endmodule
 `default_nettype wire

@@ -8,6 +8,17 @@ typedef struct {
 
 typedef enum reg [1:0]      {CPU_U = 2'b00, CPU_S = 2'b01, CPU_RESERVED = 2'b10, CPU_M = 2'b11} cpu_mode_t;
 
+function wire2cpumode(input [1:0] m);
+   begin
+      case(m)
+        2'b00: wire2cpumode = CPU_U;
+        2'b01: wire2cpumode = CPU_S;
+        2'b10: wire2cpumode = CPU_RESERVED;
+        2'b11: wire2cpumode = CPU_M;        
+      endcase
+   end
+endfunction
+
 parameter MEMREQ_READ = 0;
 parameter MEMREQ_WRITE = 1;
 

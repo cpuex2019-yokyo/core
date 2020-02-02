@@ -2,65 +2,65 @@
 `include "def.sv"
 
 module mmu(
-           input wire         clk,
-           input wire         rstn,
+           input wire        clk,
+           input wire        rstn,
 
-           input wire [31:0]  satp,
-           input wire [1:0]   cpu_mode,
-           input wire         mxr,
-           input wire         sum,
-           
-           input wire         fetch_request_enable,
-           input wire         freq_mode,
-           input wire [31:0]  freq_addr,
-           input wire [31:0]  freq_wdata,
-           input wire [3:0]   freq_wstrb,
-           output reg         fetch_response_enable,
-           output reg [31:0]  fresp_data,
+           input wire [31:0] satp,
+           input wire [1:0]  cpu_mode,
+           input wire        mxr,
+           input wire        sum,
 
-           input wire         mem_request_enable,
-           input wire         mreq_mode,
-           input wire [31:0]  mreq_addr,
-           input wire [31:0]  mreq_wdata,
-           input wire [3:0]   mreq_wstrb,
-           output reg         mem_response_enable,
-           output reg [31:0]  mresp_data,
-           
-           output reg [4:0]   exception_vec,
-           output reg         page_fault, 
+           input wire        fetch_request_enable,
+           input wire        freq_mode,
+           input wire [31:0] freq_addr,
+           input wire [31:0] freq_wdata,
+           input wire [3:0]  freq_wstrb,
+           output reg        fetch_response_enable,
+           output reg [31:0] fresp_data,
+
+           input wire        mem_request_enable,
+           input wire        mreq_mode,
+           input wire [31:0] mreq_addr,
+           input wire [31:0] mreq_wdata,
+           input wire [3:0]  mreq_wstrb,
+           output reg        mem_response_enable,
+           output reg [31:0] mresp_data,
+
+           output reg [4:0]  exception_vec,
+           output reg        page_fault, 
 
            output reg        request_enable,
            output reg        req_mode,
            output reg [31:0] req_addr,
            output reg [31:0] req_wdata,
            output reg [3:0]  req_wstrb,
-           input wire         response_enable,
-           input wire [31:0]  resp_data
+           input wire        response_enable,
+           input wire [31:0] resp_data
            );
    
 
 
-   typedef enum reg [3:0]     {
-                               WAITING_REQUEST,
-                               FETCHING_FIRST_PTE, 
-                               FETCHING_SECOND_PTE, 
-                               WAITING_RESPONSE,
-                               WAITING_RECEIVE
-                               } memistate_t;
+   typedef enum reg [3:0]    {
+                              WAITING_REQUEST,
+                              FETCHING_FIRST_PTE, 
+                              FETCHING_SECOND_PTE, 
+                              WAITING_RESPONSE,
+                              WAITING_RECEIVE
+                              } memistate_t;
    (* mark_debug = "true" *) memistate_t                 state;
 
-   typedef enum reg           {CAUSE_FETCH, CAUSE_MEM} memicause_t;
+   typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
    (* mark_debug = "true" *) memicause_t operation_cause;
 
    // 0 for Bare
    // 1 for Sv32
-   wire paging_mode = satp[31];   
-   wire [21:0] satp_ppn = satp[21:0];
+   wire                      paging_mode = satp[31];   
+   wire [21:0]               satp_ppn = satp[21:0];
    
-   reg [31:0]                 _vaddr;   
-   reg                        _mode;
-   reg [31:0]                 _wdata;
-   reg [3:0]                  _wstrb;   
+   reg [31:0]                _vaddr;   
+   reg                       _mode;
+   reg [31:0]                _wdata;
+   reg [3:0]                 _wstrb;   
    
    // utils
    ///////////////////
@@ -119,7 +119,7 @@ module mmu(
          end
       end
    endtask
-      
+   
    // privilege checker
    ///////////////////
    
@@ -142,7 +142,7 @@ module mmu(
          is_appropriate_operation = ((operation_cause == CAUSE_FETCH && pte[3])
                                      || (operation_cause == CAUSE_MEM && ((_mode == MEMREQ_READ && pte[1]) 
                                                                           || (_mode == MEMREQ_WRITE && pte[2]))));
-        end
+      end
    endfunction // is_appropriate_operation
 
    function has_permission(input [31:0] pte);
