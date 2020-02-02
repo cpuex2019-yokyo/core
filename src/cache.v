@@ -1,5 +1,4 @@
 `default_nettype none
-`include "def.sv"
 
 module cache_wrapper(
                      input wire        clk,

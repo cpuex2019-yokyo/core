@@ -51,8 +51,8 @@ module bram(
    assign rsta = !rstn;
    assign clka = clk;   
    
-   wire [31:0] araddr_offset = axi_araddr - 32'h00001000;
-   wire [31:0] awaddr_offset = axi_awaddr - 32'h00001000;
+   wire [31:0] araddr_offset = axi_araddr;
+   wire [31:0] awaddr_offset = axi_awaddr;
    
    task init;
    begin
