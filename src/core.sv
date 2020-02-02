@@ -47,12 +47,7 @@ module core
    (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
    function wire2cpumode(input [1:0] m);
      begin
-      case(m)
-        2'b00: wire2cpumode = CPU_U;
-        2'b01: wire2cpumode = CPU_S;
-        2'b10: wire2cpumode = CPU_RESERVED;
-        2'b11: wire2cpumode = CPU_M;        
-      endcase
+        wire2cpumode = CPU_U.next(m);
      end
    endfunction
 

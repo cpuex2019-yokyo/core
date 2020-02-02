@@ -94,6 +94,11 @@ module virtio(
    
                                  RAISE_IRQ                                 
                                  } controller_state;
+   function wire2cstate(input [5:0] s);
+      begin
+         wire2cstate = WAITING_NOTIFICATION.next(s);         
+      end
+   endfunction
 
    reg                          controller_notified;
    
@@ -262,7 +267,7 @@ module virtio(
                load_desc_microstate <= 0;
                desc.flags <= mem_data[31:16];
                desc.next <= mem_data[15:0];               
-               controller_state <= callback_state;               
+               controller_state <= wire2cstate(callback_state);               
             end else begin
                mem_request_enable <= 0;            
             end
