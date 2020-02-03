@@ -4,6 +4,8 @@ module adoptor #(
                  parameter LEFT_SHIFT = 0                 
                  ) (
                     // master (to)
+                    input wire clk,
+                    
                     output wire [31:0] m_araddr,
                     input wire         m_arready,
                     output wire        m_arvalid,

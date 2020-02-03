@@ -1,5 +1,4 @@
 `default_nettype none
-`include "def.sv"
 
 module memrq2axi(
            input wire        clk,
@@ -42,16 +41,15 @@ module memrq2axi(
            output reg [3:0]  axi_wstrb,
            output reg        axi_wvalid);
 
-
-   typedef enum reg [3:0]    {
-                              WAITING_REQUEST, 
-                              WAITING_MEM_RREADY, 
-                              WAITING_MEM_WREADY, 
-                              WAITING_MEM_RVALID, 
-                              WAITING_MEM_BVALID, 
-                              WAITING_RECEIVE
-                              } memistate_t;   
-   (* mark_debug = "true" *) memistate_t                 state;
+  localparam MEMREQ_READ = 0;
+  localparam MEMREQ_WRITE = 1;
+  localparam WAITING_REQUEST = 0; 
+  localparam WAITING_MEM_RREADY = 1;
+  localparam WAITING_MEM_WREADY = 2;
+  localparam WAITING_MEM_RVALID = 3;
+  localparam WAITING_MEM_BVALID = 4;
+  localparam WAITING_RECEIVE = 5;
+   (* mark_debug = "true" *) reg [3:0]                state;
 
    task init;
       begin

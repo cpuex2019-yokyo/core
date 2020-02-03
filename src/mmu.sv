@@ -71,9 +71,9 @@ module mmu(
       end
    endfunction
    
-   function vpn2(input [31:0] addr);
+   function vpn0(input [31:0] addr);
       begin
-         vpn2 = addr[21:12];
+         vpn0 = addr[21:12];
       end
    endfunction
    
@@ -268,7 +268,7 @@ module mmu(
                   state <= FETCHING_SECOND_PTE;                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
-                  req_addr <= {{{ppn(satp)}[19:0]}, 12'b0} + vpn0(_vaddr) * 4;
+                  req_addr <= {satp_ppn[19:0], 12'b0} + vpn0(_vaddr) * 4;
                end
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin

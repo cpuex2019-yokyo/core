@@ -45,11 +45,7 @@ module core
    (* mark_debug = "true" *) regvpair register;
    (* mark_debug = "true" *) cpu_mode_t cpu_mode;   
    (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
-   function wire2cpumode(input [1:0] m);
-     begin
-        wire2cpumode = CPU_U.next(m);
-     end
-   endfunction
+   const cpu_mode_t cpu_mode_base = CPU_U;
 
    // registers
    /////////
@@ -328,7 +324,7 @@ module core
       end
    endtask
    
-   task raise_instruction_adress_misaligned(input [31:0] _tval);
+   task raise_instruction_address_misaligned(input [31:0] _tval);
       begin
          exception_number <= 5'd0;         
          exception_tval <= _tval;
@@ -671,7 +667,7 @@ module core
               default: read_csr = {1'b0, 32'b0};            
             endcase // case (addr)
          end else begin
-            read_csr = {1'b1, 32'b0};           
+            read_csr = {1'b0, 32'b0};           
          end         
       end
    endfunction // read_csr
@@ -749,7 +745,6 @@ module core
               // mhpmcounterN
               // mhpmcounterNh
               // mhpmevent*
-              default: invalid_csr_addr(addr);            
             endcase           
          end
       end
@@ -913,7 +908,7 @@ module core
                         pc <= jump_dest;
                      end else begin
                         state <= TRAP;                        
-                        raise_instruction_address_misaligned();                        
+                        raise_instruction_address_misaligned(32'h0); //TODO: appropriate tval                        
                      end
                   end else begin
                      fetch_enabled <= 1;
@@ -936,7 +931,7 @@ module core
                // mstatus.mie <= mstatus.mpie;
                // mstatus.mpie <= 1;
                // mstatus.mpp <= 0;
-               cpu_mode <= wire2cpumode(_mstatus_mpp);               
+               cpu_mode <= cpu_mode_base.next(_mstatus_mpp);               
                _mstatus <= {_mstatus[31:13], 2'b0, _mstatus[10:8], 1'b1, _mstatus[6:4], _mstatus_mpie, _mstatus[2:0]};               
             end else if (instr.sret) begin
                // trap by instruction
@@ -944,7 +939,7 @@ module core
                // mstatus.sie <= mstatus.spie;
                // mstatus.spie <= 1;
                // mstatus.spp <= 0;
-               cpu_mode <= wire2cpumode(_mstatus_spp);               
+               cpu_mode <= cpu_mode_base.next(_mstatus_spp);               
                _mstatus <= {_mstatus[31:9], 1'b0, _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};               
             end else if (is_interrupted) begin
                // trap by interrupt

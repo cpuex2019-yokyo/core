@@ -78,7 +78,7 @@ module virtio(
                                  WAITING_BREADY
                                  } interface_state;
    
-   enum reg [5:0]               {
+   typedef enum reg [5:0]               {
                                  WAITING_NOTIFICATION,
                                  START_TO_HANDLE,
                                  WAITING_MEM_AVAIL_IDX,
@@ -93,13 +93,10 @@ module virtio(
                                  CONTROL_DISK,
    
                                  RAISE_IRQ                                 
-                                 } controller_state;
-   function wire2cstate(input [5:0] s);
-      begin
-         wire2cstate = WAITING_NOTIFICATION.next(s);         
-      end
-   endfunction
-
+                                 } controller_state_t;
+  controller_state_t controller_state;
+  const controller_state_t cstate_base = WAITING_NOTIFICATION;
+  
    reg                          controller_notified;
    
    task init_interface;
@@ -112,12 +109,6 @@ module virtio(
 		 core_bvalid <= 1'b0;         
 		 core_awready <= 1'b1;         
 		 core_wready <= 1'b1;
-
-         mem_request_enable <= 1'b0;
-         mem_mode <= 1'b0;
-         mem_addr <= 32'b0;
-         mem_wdata <= 32'b0;
-         mem_wstrb <= 4'b0; 
 
          controller_notified <= 1'b0;        
       end
@@ -179,11 +170,11 @@ module virtio(
             end else if (core_wvalid) begin
                core_wready <= 0;
                
-               _addr <= core_wdata;
+               _data <= core_wdata;
                _wstrb <= core_wstrb;               
             end else if (!core_awready && !core_wready) begin
                interface_state <= WAITING_BREADY;
-
+               // TODO: _wstrb
                write_reg(_addr, _data);
                controller_notified <= (_addr == 32'h50);
                core_bvalid <= 1;
@@ -267,7 +258,7 @@ module virtio(
                load_desc_microstate <= 0;
                desc.flags <= mem_data[31:16];
                desc.next <= mem_data[15:0];               
-               controller_state <= wire2cstate(callback_state);               
+               controller_state <= cstate_base.next(callback_state);               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -324,7 +315,13 @@ module virtio(
          avail_idx <= 32'h0;         
          used_idx <= 32'h0;
          load_desc_microstate <= 0;         
-         virtio_interrupt <= 1'b0;         
+         virtio_interrupt <= 1'b0;
+         
+         mem_request_enable <= 1'b0;
+         mem_mode <= 1'b0;
+         mem_addr <= 32'b0;
+         mem_wdata <= 32'b0;
+         mem_wstrb <= 4'b0;               
       end
    endtask
 

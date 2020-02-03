@@ -1,8 +1,8 @@
 `default_nettype none
 
 module cache_wrapper (
-                      input              clk,
-                      input              rstn,
+                      input   wire           clk,
+                      input   wire      rstn,
 
                       // master (to)
                       output wire [31:0] m_araddr,
