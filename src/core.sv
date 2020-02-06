@@ -307,10 +307,11 @@ module core
    
    // interrupts
    /////////
-   wire                is_interrupted = (cpu_mode == CPU_M && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) && _mstatus_mie)
-                       || (CPU_S >= cpu_mode && ((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])))
+   wire                is_interrupted = (((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) 
+                                         && ((_mstatus_mie && cpu_mode == CPU_M) || (CPU_M > cpu_mode)))
                        || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
-                           && ((cpu_mode == CPU_S && _mstatus_sie)) || CPU_S >= cpu_mode);   
+                           && ((cpu_mode == CPU_S && _mstatus_sie) || CPU_S > cpu_mode));
+   
    task update_pending_bits;
       begin
          _mip <= _mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
@@ -415,7 +416,7 @@ module core
    // stage outputs
    (* mark_debug = "true" *) wire [31:0]        exec_result;
    (* mark_debug = "true" *) wire               is_jump_chosen_e_out;
-    (* mark_debug = "true" *) reg               is_jump_chosen;  
+   (* mark_debug = "true" *) reg               is_jump_chosen;  
    (* mark_debug = "true" *) wire [31:0]        jump_dest;
 
    execute _execute(.clk(clk),
@@ -608,71 +609,71 @@ module core
          //  || (instr.csrrwi && instr.rd != 0)
          //  || (instr.csrrsi)
          //  || (instr.csrrci)) begin
-            case (addr) 
-              12'hc00: read_csr = {1'b1, _cycle};
-              12'hc01: read_csr = {1'b1, _time};
-              12'hc02: read_csr = {1'b1, _instret};
-              12'hc81: read_csr = {1'b1, _timeh};
-              12'hc82: read_csr = {1'b1, _instreth};
-              // hpmcounterN
-              // hpmcounterNh
-              12'h100: read_csr = {1'b1, _sstatus};
-              //12'h102: read_csr = {1'b1, _sedeleg};
-              //12'h103: read_csr = {1'b1, _sideleg};
-              12'h104: read_csr = {1'b1, _sie};
-              12'h105: read_csr = {1'b1, _stvec};
-              12'h106: read_csr = {1'b1, _scounteren};
-              12'h140: read_csr = {1'b1, _sscratch};
-              12'h141: read_csr = {1'b1, _sepc};
-              12'h142: read_csr = {1'b1, _scause};
-              12'h143: read_csr = {1'b1, _stval};
-              12'h144: read_csr = {1'b1, _sip};
-              12'h180: read_csr = {1'b1, _satp};
-              12'h300: read_csr = {1'b1, _mstatus};            
-              12'h301: read_csr = {1'b1, _misa};
-              12'h302: read_csr = {1'b1, _medeleg};
-              12'h303: read_csr = {1'b1, _mideleg};
-              12'h304: read_csr = {1'b1, _mie};
-              12'h305: read_csr = {1'b1, _mtvec};
-              12'h306: read_csr = {1'b1, _mcounteren};
-              12'h340: read_csr = {1'b1, _mscratch};
-              12'h341: read_csr = {1'b1, _mepc};
-              12'h342: read_csr = {1'b1, _mcause};
-              12'h343: read_csr = {1'b1, _mtval};                       
-              12'h344: read_csr = {1'b1, _mip};
-              12'h3a0: read_csr = {1'b1, _pmpcfg[127:96]};
-              12'h3a1: read_csr = {1'b1, _pmpcfg[95:64]};
-              12'h3a2: read_csr = {1'b1, _pmpcfg[63:32]};
-              12'h3a3: read_csr = {1'b1, _pmpcfg[31:0]};
-              12'h3b0: read_csr = {1'b1, _pmpaddr[0]};
-              12'h3b1: read_csr = {1'b1, _pmpaddr[1]};
-              12'h3b2: read_csr = {1'b1, _pmpaddr[2]};
-              12'h3b3: read_csr = {1'b1, _pmpaddr[3]};
-              12'h3b4: read_csr = {1'b1, _pmpaddr[4]};
-              12'h3b5: read_csr = {1'b1, _pmpaddr[5]};
-              12'h3b6: read_csr = {1'b1, _pmpaddr[6]};
-              12'h3b7: read_csr = {1'b1, _pmpaddr[7]};
-              12'h3b8: read_csr = {1'b1, _pmpaddr[8]};
-              12'h3b9: read_csr = {1'b1, _pmpaddr[9]};
-              12'h3ba: read_csr = {1'b1, _pmpaddr[10]};
-              12'h3bb: read_csr = {1'b1, _pmpaddr[11]};
-              12'h3bc: read_csr = {1'b1, _pmpaddr[12]};
-              12'h3bd: read_csr = {1'b1, _pmpaddr[13]};
-              12'h3be: read_csr = {1'b1, _pmpaddr[14]};
-              12'h3bf: read_csr = {1'b1, _pmpaddr[15]};            
-              12'hb00: read_csr = {1'b1, _mcycle};
-              12'hb02: read_csr = {1'b1, _minstret};
-              12'hb80: read_csr = {1'b1, _mcycleh};
-              12'hb82: read_csr = {1'b1, _minstreth};
-              12'hf11: read_csr = {1'b1, _mvendorid};
-              12'hf12: read_csr = {1'b1, _marchid};
-              12'hf13: read_csr = {1'b1, _mimpid};
-              12'hf14: read_csr = {1'b1, _mhartid};
-              // mhpmcounterN
-              // mhpmcounterNh
-              // mhpmevent*
-              default: read_csr = {1'b0, 32'b0};            
-            endcase // case (addr)
+         case (addr) 
+           12'hc00: read_csr = {1'b1, _cycle};
+           12'hc01: read_csr = {1'b1, _time};
+           12'hc02: read_csr = {1'b1, _instret};
+           12'hc81: read_csr = {1'b1, _timeh};
+           12'hc82: read_csr = {1'b1, _instreth};
+           // hpmcounterN
+           // hpmcounterNh
+           12'h100: read_csr = {1'b1, _sstatus};
+           //12'h102: read_csr = {1'b1, _sedeleg};
+           //12'h103: read_csr = {1'b1, _sideleg};
+           12'h104: read_csr = {1'b1, _sie};
+           12'h105: read_csr = {1'b1, _stvec};
+           12'h106: read_csr = {1'b1, _scounteren};
+           12'h140: read_csr = {1'b1, _sscratch};
+           12'h141: read_csr = {1'b1, _sepc};
+           12'h142: read_csr = {1'b1, _scause};
+           12'h143: read_csr = {1'b1, _stval};
+           12'h144: read_csr = {1'b1, _sip};
+           12'h180: read_csr = {1'b1, _satp};
+           12'h300: read_csr = {1'b1, _mstatus};            
+           12'h301: read_csr = {1'b1, _misa};
+           12'h302: read_csr = {1'b1, _medeleg};
+           12'h303: read_csr = {1'b1, _mideleg};
+           12'h304: read_csr = {1'b1, _mie};
+           12'h305: read_csr = {1'b1, _mtvec};
+           12'h306: read_csr = {1'b1, _mcounteren};
+           12'h340: read_csr = {1'b1, _mscratch};
+           12'h341: read_csr = {1'b1, _mepc};
+           12'h342: read_csr = {1'b1, _mcause};
+           12'h343: read_csr = {1'b1, _mtval};                       
+           12'h344: read_csr = {1'b1, _mip};
+           12'h3a0: read_csr = {1'b1, _pmpcfg[127:96]};
+           12'h3a1: read_csr = {1'b1, _pmpcfg[95:64]};
+           12'h3a2: read_csr = {1'b1, _pmpcfg[63:32]};
+           12'h3a3: read_csr = {1'b1, _pmpcfg[31:0]};
+           12'h3b0: read_csr = {1'b1, _pmpaddr[0]};
+           12'h3b1: read_csr = {1'b1, _pmpaddr[1]};
+           12'h3b2: read_csr = {1'b1, _pmpaddr[2]};
+           12'h3b3: read_csr = {1'b1, _pmpaddr[3]};
+           12'h3b4: read_csr = {1'b1, _pmpaddr[4]};
+           12'h3b5: read_csr = {1'b1, _pmpaddr[5]};
+           12'h3b6: read_csr = {1'b1, _pmpaddr[6]};
+           12'h3b7: read_csr = {1'b1, _pmpaddr[7]};
+           12'h3b8: read_csr = {1'b1, _pmpaddr[8]};
+           12'h3b9: read_csr = {1'b1, _pmpaddr[9]};
+           12'h3ba: read_csr = {1'b1, _pmpaddr[10]};
+           12'h3bb: read_csr = {1'b1, _pmpaddr[11]};
+           12'h3bc: read_csr = {1'b1, _pmpaddr[12]};
+           12'h3bd: read_csr = {1'b1, _pmpaddr[13]};
+           12'h3be: read_csr = {1'b1, _pmpaddr[14]};
+           12'h3bf: read_csr = {1'b1, _pmpaddr[15]};            
+           12'hb00: read_csr = {1'b1, _mcycle};
+           12'hb02: read_csr = {1'b1, _minstret};
+           12'hb80: read_csr = {1'b1, _mcycleh};
+           12'hb82: read_csr = {1'b1, _minstreth};
+           12'hf11: read_csr = {1'b1, _mvendorid};
+           12'hf12: read_csr = {1'b1, _marchid};
+           12'hf13: read_csr = {1'b1, _mimpid};
+           12'hf14: read_csr = {1'b1, _mhartid};
+           // mhpmcounterN
+           // mhpmcounterNh
+           // mhpmevent*
+           default: read_csr = {1'b0, 32'b0};            
+         endcase // case (addr)
          //end else begin
          // read_csr = {1'b0, 32'b0};           
          //end         
@@ -798,10 +799,10 @@ module core
             fetch_enabled <= 1;
          end else if (state == FETCH && is_fetch_done) begin
             if (instr_raw == 32'b0) begin // TODO
-                raise_illegal_instruction(instr_raw); // TODO
-                state <= TRAP;
+               raise_illegal_instruction(instr_raw); // TODO
+               state <= TRAP;
             end else begin
-                state <= DECODE;
+               state <= DECODE;
             end
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
