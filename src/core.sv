@@ -414,7 +414,8 @@ module core
 
    // stage outputs
    (* mark_debug = "true" *) wire [31:0]        exec_result;
-   (* mark_debug = "true" *) wire               is_jump_chosen;
+   (* mark_debug = "true" *) wire               is_jump_chosen_e_out;
+    (* mark_debug = "true" *) reg               is_jump_chosen;  
    (* mark_debug = "true" *) wire [31:0]        jump_dest;
 
    execute _execute(.clk(clk),
@@ -427,7 +428,7 @@ module core
                     .register(register),
 
                     .result(exec_result),
-                    .is_jump_chosen(is_jump_chosen),
+                    .is_jump_chosen(is_jump_chosen_e_out),
                     .jump_dest(jump_dest));
 
    // mem stage
@@ -558,9 +559,9 @@ module core
 
    task set_cause(input [1:0] next_cpu_mode, input [31:0] value);
       begin
-         if (next_cpu_mode == CPU_M) begin
+         if (cpu_mode_base.next(next_cpu_mode) == CPU_M) begin
             write_mcause(value);
-         end  else if (next_cpu_mode == CPU_S) begin
+         end  else if (cpu_mode_base.next(next_cpu_mode) == CPU_S) begin
             write_scause(value);
          end            
       end
@@ -568,9 +569,9 @@ module core
    
    task set_tval(input [1:0] next_cpu_mode, input [31:0] value);
       begin
-         if (next_cpu_mode == CPU_M) begin
+         if (cpu_mode_base.next(next_cpu_mode) == CPU_M) begin
             write_mtval(value);
-         end  else if (next_cpu_mode == CPU_S) begin
+         end  else if (cpu_mode_base.next(next_cpu_mode) == CPU_S) begin
             write_stval(value);
          end            
       end
@@ -578,9 +579,9 @@ module core
 
    task set_epc(input  [1:0] next_cpu_mode, input [31:0] value);
       begin
-         if (next_cpu_mode == CPU_M) begin
+         if (cpu_mode_base.next(next_cpu_mode) == CPU_M) begin
             write_mepc(value);
-         end else if (next_cpu_mode == CPU_S) begin
+         end else if (cpu_mode_base.next(next_cpu_mode) == CPU_S) begin
             write_sepc(value);
          end            
       end
@@ -588,10 +589,10 @@ module core
 
    task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec);
       begin
-         if (next_cpu_mode == CPU_M) begin
+         if (cpu_mode_base.next(next_cpu_mode) == CPU_M) begin
             pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
                   _mtvec + 4 * vec;
-         end else if (next_cpu_mode == CPU_S) begin
+         end else if (cpu_mode_base.next(next_cpu_mode) == CPU_S) begin
             pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _stvec:
                   _stvec + 4 * vec;         
          end
@@ -599,14 +600,14 @@ module core
    endtask
    
    // here we assume that this function will used in the decode phase
-   function read_csr(input [11:0] addr);
+   function [32:0] read_csr(input [11:0] addr);
       begin
-         if ((instr.csrrw && instr.rd != 0)
-             || (instr.csrrs)
-             || (instr.csrrc)
-             || (instr.csrrwi && instr.rd != 0)
-             || (instr.csrrsi)
-             || (instr.csrrci)) begin
+         //if ((instr.csrrw && instr.rd != 0)
+         //  || (instr_de_out.csrrs)
+         //  || (instr_de_out.csrrc)
+         //  || (instr.csrrwi && instr.rd != 0)
+         //  || (instr.csrrsi)
+         //  || (instr.csrrci)) begin
             case (addr) 
               12'hc00: read_csr = {1'b1, _cycle};
               12'hc01: read_csr = {1'b1, _time};
@@ -672,9 +673,9 @@ module core
               // mhpmevent*
               default: read_csr = {1'b0, 32'b0};            
             endcase // case (addr)
-         end else begin
-            read_csr = {1'b0, 32'b0};           
-         end         
+         //end else begin
+         // read_csr = {1'b0, 32'b0};           
+         //end         
       end
    endfunction // read_csr
 
@@ -757,7 +758,7 @@ module core
    endtask
    
    // here we assume this function is expanded into exec phase
-   function csr_v(input [31:0] original);
+   function [31:0] csr_v(input [31:0] original);
       begin         
          if (instr.csrrw) begin
             csr_v = register.rs1;            
@@ -796,7 +797,12 @@ module core
             state <= FETCH;
             fetch_enabled <= 1;
          end else if (state == FETCH && is_fetch_done) begin
-            state <= DECODE;
+            if (instr_raw == 32'b0) begin // TODO
+                raise_illegal_instruction(instr_raw); // TODO
+                state <= TRAP;
+            end else begin
+                state <= DECODE;
+            end
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
             register <= register_d_out;
@@ -863,22 +869,26 @@ module core
                data_to_write <= csr_value;          
             end else begin
                // invalid_csr_addr ... instr.imm[11:0]
+               raise_illegal_instruction(instr_raw);
                state <= TRAP;                  
             end
          end else if (state == EXEC && is_exec_done) begin
             exec_enabled <= 0;
+            is_jump_chosen <= is_jump_chosen_e_out;
             // TODO(future): implement wfi correctly, although the spec says regarding wfi as nop is legal...
             if (instr.fence || instr.fencei || instr.wfi) begin
                state <= WRITE;
             end else if (instr.mret) begin
                state <= TRAP;                  
                if (cpu_mode >= CPU_M) begin
+                  // TODO
                end else begin
                   raise_illegal_instruction(instr_raw);            
                end
             end else if (instr.sret) begin
                state <= TRAP;                  
                if (cpu_mode >= CPU_S) begin
+                  // TODO
                end else begin
                   raise_illegal_instruction(instr_raw);            
                end
@@ -912,6 +922,7 @@ module core
                         fetch_enabled <= 1;
                         state <= FETCH;
                         pc <= jump_dest;
+                        is_jump_chosen <= 1'b0;
                      end else begin
                         state <= TRAP;                        
                         raise_instruction_address_misaligned(32'h0); //TODO: appropriate tval                        

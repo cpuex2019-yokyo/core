@@ -48,7 +48,7 @@ module bram(
    localparam WAITING_WROTE = 6;   
    localparam WAITING_BREADY = 7;
 
-   assign rsta = !rstn;
+   assign rsta = ~rstn;
    assign clka = clk;   
    
    wire [31:0] araddr_offset = axi_araddr;
@@ -82,7 +82,7 @@ module bram(
     init();      
    end
    
-   
+   reg [31:0] _wstrb_buf;
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_QUERY) begin
@@ -90,15 +90,20 @@ module bram(
                axi_arready <= 0;
                addra <= araddr_offset;       
                state <= WAITING_MEM1;
-            end else if (axi_wvalid) begin
-               axi_wready <= 0;
-               dina <= axi_wdata;      
-               wea <= axi_wstrb;         
-            end else if (axi_awvalid) begin
-               axi_awready <= 0;  
-               addra <= awaddr_offset;               
-            end else if (!axi_awready && !axi_wready) begin
-               state <= WAITING_WROTE;         
+            end else begin
+                if (axi_wvalid) begin
+                   axi_wready <= 0;
+                   dina <= axi_wdata;      
+                   _wstrb_buf <= axi_wstrb;
+                end           
+                if (axi_awvalid) begin
+                   axi_awready <= 0;  
+                   addra <= awaddr_offset; 
+                end              
+                if (!axi_awready && !axi_wready) begin
+                   state <= WAITING_WROTE;
+                   wea <= _wstrb_buf;      
+                end
             end         
          end else if (state == WAITING_MEM1) begin
             state <= WAITING_MEM2;            
@@ -112,7 +117,8 @@ module bram(
                axi_arready <= 1;
                state <= WAITING_QUERY;               
             end
-         end if (state == WAITING_WROTE) begin            
+         end if (state == WAITING_WROTE) begin 
+           wea <= 4'b0;           
             axi_bresp <= 2'b0;
             axi_bvalid <= 1;            
             state <= WAITING_BREADY;            
