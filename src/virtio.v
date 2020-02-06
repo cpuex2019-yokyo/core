@@ -30,7 +30,7 @@ module virtio_wrapper(
 	                  input wire [3:0]   core_wstrb,
 	                  input wire         core_wvalid,
 
-                      // bus
+                      // bus for mem
                       output wire        mem_request_enable,
                       output wire        mem_mode,
                       output wire [31:0] mem_addr,
@@ -39,6 +39,15 @@ module virtio_wrapper(
                       input wire         mem_response_enable,
                       input wire [31:0]  mem_data,
 
+                      // bus for disk
+                      output reg         disk_request_enable,
+                      output reg         disk_mode,
+                      output reg [31:0]  disk_addr,
+                      output reg [31:0]  disk_wdata,
+                      output reg [3:0]   disk_wstrb, 
+                      input wire         disk_response_enable,
+                      input wire [31:0]  disk_data,
+                      
                       // general
                       output wire        virtio_interrupt
                       );
@@ -79,6 +88,14 @@ module virtio_wrapper(
                   .mem_response_enable(mem_response_enable),
                   .mem_data(mem_data),
 
+                  .disk_request_enable(disk_request_enable),
+                  .disk_mode(disk_mode),
+                  .disk_addr(disk_addr),
+                  .disk_wdata(disk_wdata),
+                  .disk_wstrb(disk_wstrb),
+                  .disk_response_enable(disk_response_enable),
+                  .disk_data(disk_data),
+                  
                   .virtio_interrupt(virtio_interrupt)
                   );
       

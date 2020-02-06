@@ -5,7 +5,7 @@
 module virtio(
 	          input wire        clk,
 	          input wire        rstn,
-              
+
               // bus for core
 	          input wire [31:0] core_araddr,
 	          output reg        core_arready,
@@ -31,7 +31,7 @@ module virtio(
 	          input wire [3:0]  core_wstrb,
 	          input wire        core_wvalid,
 
-              // bus
+              // bus for mem
               output reg        mem_request_enable,
               output reg        mem_mode,
               output reg [31:0] mem_addr,
@@ -39,6 +39,15 @@ module virtio(
               output reg [3:0]  mem_wstrb, 
               input wire        mem_response_enable,
               input wire [31:0] mem_data,
+
+              // bus for disk
+              output reg        disk_request_enable,
+              output reg        disk_mode,
+              output reg [31:0] disk_addr,
+              output reg [31:0] disk_wdata,
+              output reg [3:0]  disk_wstrb, 
+              input wire        disk_response_enable,
+              input wire [31:0] disk_data,
 
               // general
               output reg        virtio_interrupt
@@ -78,25 +87,29 @@ module virtio(
                                  WAITING_BREADY
                                  } interface_state;
    
-   typedef enum reg [5:0]               {
+   typedef enum reg [5:0]       {
+                                 // waiting state
                                  WAITING_NOTIFICATION,
+
+                                 // main loop
                                  START_TO_HANDLE,
                                  WAITING_MEM_AVAIL_IDX,
+                                 LOAD_FIRST_INDEX,
                                  LOAD_FIRST_DESC,
                                  HANDLE_FIRST_DESC,
                                  LOAD_SECOND_DESC,
                                  HANDLE_SECOND_DESC,
                                  LOAD_THIRD_DESC,
                                  HANDLE_THIRD_DESC,
+                                 CONTROL_DISK,   
+                                 WRITE_USED,
 
-                                 // TODO: add appropriate states for disk controlling
-                                 CONTROL_DISK,
-   
+                                 // final state
                                  RAISE_IRQ                                 
                                  } controller_state_t;
-  controller_state_t controller_state;
-  const controller_state_t cstate_base = WAITING_NOTIFICATION;
-  
+   controller_state_t controller_state;
+   const controller_state_t cstate_base = WAITING_NOTIFICATION;
+   
    reg                          controller_notified;
    
    task init_interface;
@@ -203,21 +216,20 @@ module virtio(
    end
 
 
-   // avail idx cache
-   reg [31:0] avail_idx;
-   reg [31:0] used_idx;
+   reg [15:0] avail_idx;
+   reg [15:0] used_idx;
 
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
    wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
    wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);
 
-   // current descriptor head
-   wire [31:0] desc_base = desc_head + 16 * ((used_idx-1) % queue_num);
-
    // loaded data
    VRingDesc desc;   
    OutHDR outhdr;   
+   reg [15:0]  first_idx;   
+   reg [15:0]  second_idx;   
+   reg [15:0]  third_idx;   
    reg [31:0]  buffer_addr;   
    reg [31:0]  status_addr;
    
@@ -225,21 +237,21 @@ module virtio(
    ///////////////////////
    
    reg [3:0]   load_desc_microstate;
-   task load_desc(input [5:0] callback_state);
+   task load_desc(input [31:0] desc_idx, input [5:0] callback_state);
       begin
          if (load_desc_microstate == 0) begin
             load_desc_microstate <= 1;            
             desc.addr[63:32] <= 32'b0;
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;                  
-            mem_addr <= desc_base + 4;
+            mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 4;
          end else if (load_desc_microstate == 1) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 2;
                desc.addr[31:0] <= mem_data;               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_base + 8;               
+               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 8;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -249,7 +261,7 @@ module virtio(
                desc.len <= mem_data;               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_base + 12;               
+               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 12;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -277,7 +289,7 @@ module virtio(
             outhdr.reserved <= 32'b0;            
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;                  
-            mem_addr <= desc.addr[31:0];            
+            mem_addr <= desc.addr[31:0];
          end else if (load_outhdr_microstate == 1) begin
             if (mem_response_enable) begin
                load_outhdr_microstate <= 2;
@@ -309,12 +321,218 @@ module virtio(
          end
       end
    endtask
+
+   // disk control
+   ///////////////////////
+   
+   enum reg [3:0] {
+                   CDISK_INIT, 
+                   CDISK_R_DISK, 
+                   CDISK_R_MEM, 
+                   CDISK_W_DISK, 
+                   CDISK_W_MEM
+                   } cdisk_microstate;   
+   reg [6:0]      cdisk_loop_index;
+   reg [31:0]     cdisk_buf [0:127];
+
+   task load_disk(input startup);
+      begin
+         if (startup) begin
+            cdisk_loop_index <= 0;
+            disk_request_enable <= 1'b1;
+            disk_mode <= MEMREQ_READ;
+            disk_addr <= {outhdr.sector[22:0], 9'b0};            
+         end else begin
+            if (disk_response_enable) begin
+               if (cdisk_loop_index == 127) begin
+                  cdisk_microstate <= CDISK_W_MEM;
+                  write_mem(1);                  
+               end else begin
+                  cdisk_buf[cdisk_loop_index] <= disk_data;               
+                  cdisk_loop_index <= cdisk_loop_index + 1;
+                  
+                  disk_request_enable <= 1'b1;
+                  disk_mode <= MEMREQ_READ;
+                  disk_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
+               end
+            end else begin
+               disk_request_enable <= 1'b0;                           
+            end
+         end
+      end
+   endtask
+
+   task write_mem(input startup);
+      begin
+         if (startup) begin
+            cdisk_loop_index <= 0;
+            mem_request_enable <= 1'b1;
+            mem_mode <= MEMREQ_WRITE;
+            mem_wdata <= cdisk_buf[0];
+            mem_wstrb <= 4'b1111;
+            mem_addr <= {outhdr.sector[22:0], 9'b0};            
+         end else begin
+            if (mem_response_enable) begin
+               if (cdisk_loop_index == 127) begin
+                  cdisk_microstate <= CDISK_INIT;
+                  controller_state <= START_TO_HANDLE;
+               end else begin
+                  cdisk_loop_index <= cdisk_loop_index + 1;               
+                  mem_request_enable <= 1'b1;
+                  mem_mode <= MEMREQ_WRITE;
+                  mem_wdata <= cdisk_buf[cdisk_loop_index + 1];
+                  mem_wstrb <= 4'b1111;
+                  mem_addr <= {outhdr.sector[22:0], 9'b0} + (cmem_loop_index+1);
+               end                  
+            end else begin
+               disk_request_enable <= 1'b0;                           
+            end
+         end
+      end
+   endtask
+   
+   task load_mem(input startup);
+      begin
+         if (startup) begin
+            cdisk_loop_index <= 0;
+            mem_request_enable <= 1'b1;
+            mem_mode <= MEMREQ_READ;
+            mem_addr <= {outhdr.sector[22:0], 9'b0};            
+         end else begin
+            if (mem_response_enable) begin
+               if (cdisk_loop_index == 127) begin
+                  cmem_microstate <= CDISK_W_DISK;
+                  write_disk(1);                  
+               end else begin
+                  cdisk_buf[mem_loop_index]  <= mem_data;               
+                  cdisk_loop_index <= cdisk_loop_index + 1;
+                  
+                  mem_request_enable <= 1'b1;
+                  mem_mode <= MEMREQ_READ;
+                  mem_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
+               end                  
+            end else begin
+               mem_request_enable <= 1'b0;                           
+            end
+         end
+      end
+   endtask // load_mem
+
+   task write_disk(input startup);
+      begin
+         if (startup) begin
+            cdisk_loop_index <= 0;
+            disk_request_enable <= 1'b1;
+            disk_mode <= MEMREQ_WRITE;
+            disk_wdata <= cdisk_buf[0];
+            disk_wstrb <= 4'b1111;
+            disk_addr <= {outhdr.sector[22:0], 9'b0};            
+         end else begin
+            if (disk_response_enable) begin
+               if (cdisk_loop_index == 127) begin
+                  cdisk_microstate <= CDISK_INIT;
+                  controller_state <= WRITE_USED;
+               end else begin
+                  cdisk_loop_index <= cdisk_loop_index + 1;               
+                  disk_request_enable <= 1'b1;
+                  disk_mode <= MEMREQ_WRITE;
+                  disk_wdata <= cdisk_buf[cdisk_loop_index + 1];
+                  disk_wstrb <= 4'b1111;
+                  disk_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
+               end                  
+            end else begin
+               disk_request_enable <= 1'b0;                           
+            end
+         end
+      end
+   endtask
+   
+   task control_disk;
+      begin
+         if (cdisk_microstate == CDISK_INIT) begin
+            disk_loop_index <= 0;            
+            if (outhdr.btype == VIRTIO_BLK_T_IN) begin
+               cdisk_microstate <= CDISK_R_DISK;
+               load_disk(1);               
+            end else begin
+               cdisk_microstate <= CDISK_R_MEM;
+               load_mem(1);               
+            end
+         end else if (cdisk_microstate == CDISK_R_DISK) begin
+            load_disk(0);            
+         end else if (cdisk_microstate == CDISK_R_MEM) begin
+            load_mem(0);            
+         end else if (cdisk_microstate == CDISK_W_DISK) begin
+            write_disk(0);            
+         end else if (cdisk_microstate == CDISK_W_MEM) begin
+            write_mem(0);            
+         end
+      end
+   endtask // control_disk
+
+   
+   // notify
+   ///////////////////////
+   
+   enum reg [3:0] {
+                   NOTIFY_INIT, 
+                   NOTIFY_WAITING, 
+                   NOTIFY_WAITING2, 
+                   NOTIFY_WAITING3
+                   } notify_microstate;   
+   task write_used;
+      begin
+         if (notify_microstate == NOTIFY_INIT) begin
+            notify_microstate <= NOTIFY_WAITING;
+            
+            mem_request_enable <= 1'b1;
+            mem_mode <= MEMREQ_WRITE;
+            mem_wdata <= used_idx;
+            mem_wstrb <= 4'b1111;
+            mem_addr <= used_head + 32'd2;
+         end else if (notify_microstate == NOTIFY_WAITING) begin
+            mem_request_enable <= 1'b0;                 
+            if (mem_response_enable) begin
+               notify_microstate <= NOTIFY_WAITING2;
+
+               mem_request_enable <= 1'b1;
+               mem_mode <= MEMREQ_WRITE;
+               mem_wdata <= {16'b0, first_idx};               
+               mem_wstrb <= 4'b1111;
+               mem_addr <= used_head + 8 * (used_idx-1);
+            end
+         end else if (notify_microstate == NOTIFY_WAITING2) begin
+            mem_request_enable <= 1'b0;                 
+            if (mem_response_enable) begin
+               notify_microstate <= NOTIFY_WAITING3;
+
+               mem_request_enable <= 1'b1;
+               mem_mode <= MEMREQ_WRITE;
+               mem_wdata <= 32'b0; // TODO(linux): set appropriate value
+               mem_wstrb <= 4'b1111;
+               mem_addr <= used_head + 8 * (used_idx-1) + 4;
+            end
+         end else if (notify_microstate == NOTIFY_WAITING3) begin
+            mem_request_enable <= 1'b0;                 
+            if (mem_response_enable) begin
+               controller_state <= START_TO_HANDLE;               
+               notify_microstate <= NOTIFY_INIT;
+            end
+         end
+      end
+   endtask
+   
    
    task init_controller;
       begin
          avail_idx <= 32'h0;         
          used_idx <= 32'h0;
-         load_desc_microstate <= 0;         
+         load_desc_microstate <= 0;
+         load_outhdr_microstate <= 0;
+         
+         cdisk_microstate <= CDISK_INIT;
+         cdisk_loop_index <= 0;         
+         
          virtio_interrupt <= 1'b0;
          
          mem_request_enable <= 1'b0;
@@ -325,7 +543,6 @@ module virtio(
       end
    endtask
 
-   
    always @(posedge clk) begin
       if(rstn) begin
          if(controller_state == WAITING_NOTIFICATION) begin
@@ -335,39 +552,58 @@ module virtio(
             end
          end else if (controller_state == START_TO_HANDLE) begin
             mem_request_enable <= 1;
-            // *(avail_head + 2)            
             mem_mode <= MEMREQ_READ;            
-            mem_addr <= {avail_head[31:4], 4'd2}; 
+            mem_addr <= avail_head + 32'd2; 
             
             controller_state <= WAITING_MEM_AVAIL_IDX;            
          end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
+            if (mem_response_enable) begin
+               avail_idx <= mem_data[15:0];
+               if (used_idx != mem_data[15:0]) begin
+                  used_idx <= used_idx + 1;
+                  controller_state <= LOAD_FIRST_INDEX;
+
+                  mem_request_enable <= 1;
+                  mem_mode <= MEMREQ_READ;            
+                  mem_addr <= avail_head + 4 + 2 * (used_idx % queue_num);    
+               end else begin
+                  controller_state <= RAISE_IRQ;
+               end
+            end else begin
+               mem_request_enable <= 0;
+            end
+         end else if (controller_state == LOAD_FIRST_INDEX) begin
             mem_request_enable <= 0;
             if (mem_response_enable) begin
-               avail_idx <= mem_data;
-               if (used_idx != avail_idx) begin
-                  used_idx <= used_idx + 1;
-                  controller_state <= LOAD_FIRST_DESC;                  
-               end else begin
-                  controller_state <= RAISE_IRQ;                  
-               end
+               first_idx <= mem_data[15:0];
+               controller_state <= LOAD_FIRST_DESC;
             end
          end else if (controller_state == LOAD_FIRST_DESC) begin
-            load_desc(HANDLE_FIRST_DESC);
+            // this change state to HANDLE_FIRST_DESC when finished
+            load_desc(first_idx, HANDLE_FIRST_DESC);
          end else if (controller_state == HANDLE_FIRST_DESC) begin
+            // this change state to LOAD_SECOND_DESC when finished
+            second_idx <= desc.next;            
             load_outhdr();            
          end else if (controller_state == LOAD_SECOND_DESC) begin
-            load_desc(HANDLE_SECOND_DESC);
+            // this change state to HANDLE_SECOND_DESC when finished
+            load_desc(second_idx, HANDLE_SECOND_DESC);
          end else if (controller_state == HANDLE_SECOND_DESC) begin
+            third_idx <= desc.next;            
             buffer_addr <= desc.addr[31:0];
             controller_state <= LOAD_THIRD_DESC;            
          end else if (controller_state == LOAD_THIRD_DESC) begin
-            load_desc(HANDLE_THIRD_DESC);
+            // this change state to LOAD_THIRD_DESC when finished
+            load_desc(third_idx, HANDLE_THIRD_DESC);
          end else if (controller_state == HANDLE_THIRD_DESC) begin
             status_addr <= desc.addr[31:0];            
-            controller_state <= CONTROL_DISK;
+            controller_state <= CONTROL_DISK;            
          end else if (controller_state == CONTROL_DISK) begin
-            // TODO: we have to use AXI Quad SPI or something like that!
-            // when completed, controller_state <= START_TO_HANDLE should be executed (due to multiple req).
+            // this change state to WRITE_USED when finished
+            control_disk();            
+         end else if (controller_state == WRITE_USED) begin
+            // write_used() change state to START_TO_HANDLE when finished
+            write_used();            
          end else if (controller_state == RAISE_IRQ) begin
             virtio_interrupt <= 1'b1;            
             controller_state <= WAITING_NOTIFICATION;            
