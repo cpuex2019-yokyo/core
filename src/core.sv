@@ -626,7 +626,7 @@ module core
               12'h142: read_csr = {1'b1, _scause};
               12'h143: read_csr = {1'b1, _stval};
               12'h144: read_csr = {1'b1, _sip};
-              12'h180: read_csr = {1'b1, _satp};            
+              12'h180: read_csr = {1'b1, _satp};
               12'h300: read_csr = {1'b1, _mstatus};            
               12'h301: read_csr = {1'b1, _misa};
               12'h302: read_csr = {1'b1, _medeleg};
@@ -663,6 +663,10 @@ module core
               12'hb02: read_csr = {1'b1, _minstret};
               12'hb80: read_csr = {1'b1, _mcycleh};
               12'hb82: read_csr = {1'b1, _minstreth};
+              12'hf11: read_csr = {1'b1, _mvendorid};
+              12'hf12: read_csr = {1'b1, _marchid};
+              12'hf13: read_csr = {1'b1, _mimpid};
+              12'hf14: read_csr = {1'b1, _mhartid};
               // mhpmcounterN
               // mhpmcounterNh
               // mhpmevent*
