@@ -211,7 +211,7 @@ module mmu(
          if (state == WAITING_REQUEST && fetch_request_enable) begin
             exception_vec <= 5'b0;
             page_fault <= 1'b0;
-            
+            operation_cause <= CAUSE_FETCH;            
             if (paging_mode == 0) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
@@ -225,8 +225,7 @@ module mmu(
                request_enable <= 1'b1;
                req_mode <= MEMREQ_READ;
                req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
-               
-               operation_cause <= CAUSE_FETCH;            
+               ;            
                _vaddr <= freq_addr;
                _mode <= freq_mode;
                _wdata <= freq_wdata;
@@ -235,7 +234,7 @@ module mmu(
          end else if (state == WAITING_REQUEST & mem_request_enable) begin
             exception_vec <= 5'b0;
             page_fault <= 1'b0;
-            
+            operation_cause <= CAUSE_MEM;            
             if (paging_mode == 0) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
@@ -249,8 +248,7 @@ module mmu(
                request_enable <= 1'b1;
                req_mode <= MEMREQ_READ;
                req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
-               
-               operation_cause <= CAUSE_MEM;            
+                          
                _vaddr <= mreq_addr;
                _mode <= mreq_mode;
                _wdata <= mreq_wdata;
@@ -282,7 +280,7 @@ module mmu(
                   raise_pagefault_exception();               
                end
             end
-         end if (state == WAITING_RESPONSE && response_enable) begin
+         end else if (state == WAITING_RESPONSE && response_enable) begin
             state <= WAITING_RECEIVE;            
             if (operation_cause == CAUSE_FETCH) begin
                fetch_response_enable <= 1'b1;               
@@ -291,7 +289,7 @@ module mmu(
                mem_response_enable <= 1'b1;               
                mresp_data <= resp_data;
             end
-         end if (state == WAITING_RECEIVE) begin
+         end else if (state == WAITING_RECEIVE) begin
             state <= WAITING_REQUEST;            
             if (operation_cause == CAUSE_FETCH) begin
                fetch_response_enable <= 1'b0;               

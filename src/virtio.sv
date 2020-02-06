@@ -382,7 +382,7 @@ module virtio(
                   mem_mode <= MEMREQ_WRITE;
                   mem_wdata <= cdisk_buf[cdisk_loop_index + 1];
                   mem_wstrb <= 4'b1111;
-                  mem_addr <= {outhdr.sector[22:0], 9'b0} + (cmem_loop_index+1);
+                  mem_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
                end                  
             end else begin
                disk_request_enable <= 1'b0;                           
@@ -401,10 +401,10 @@ module virtio(
          end else begin
             if (mem_response_enable) begin
                if (cdisk_loop_index == 127) begin
-                  cmem_microstate <= CDISK_W_DISK;
+                  cdisk_microstate <= CDISK_W_DISK;
                   write_disk(1);                  
                end else begin
-                  cdisk_buf[mem_loop_index]  <= mem_data;               
+                  cdisk_buf[cdisk_loop_index]  <= mem_data;               
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   mem_request_enable <= 1'b1;
@@ -450,7 +450,7 @@ module virtio(
    task control_disk;
       begin
          if (cdisk_microstate == CDISK_INIT) begin
-            disk_loop_index <= 0;            
+            cdisk_loop_index <= 0;            
             if (outhdr.btype == VIRTIO_BLK_T_IN) begin
                cdisk_microstate <= CDISK_R_DISK;
                load_disk(1);               

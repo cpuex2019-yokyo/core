@@ -52,6 +52,8 @@ module core
    (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
    (* mark_debug = "true" *) wire [31:0]        reg_w_data;
    (* mark_debug = "true" *) wire               reg_w_enable;
+   instructions instr_d_out;
+   regvpair register_d_out;         
    registers _registers(.clk(clk),
                         .rstn(rstn),
                         .r_enabled(is_fetch_done),
@@ -383,8 +385,7 @@ module core
    // none
 
    // stage outputs
-   instructions instr_d_out;
-   regvpair register_d_out;      
+   // defined above
 
    wire [4:0]          rs1_a;
    wire [4:0]          rs2_a;
@@ -505,6 +506,7 @@ module core
 
          state <= INIT;         
          cpu_mode <= CPU_M;
+         is_csr_valid <= 1'b0;
 
          // init csr
          _stvec <= 32'b0;

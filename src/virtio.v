@@ -40,11 +40,11 @@ module virtio_wrapper(
                       input wire [31:0]  mem_data,
 
                       // bus for disk
-                      output reg         disk_request_enable,
-                      output reg         disk_mode,
-                      output reg [31:0]  disk_addr,
-                      output reg [31:0]  disk_wdata,
-                      output reg [3:0]   disk_wstrb, 
+                      output wire         disk_request_enable,
+                      output wire         disk_mode,
+                      output wire [31:0]  disk_addr,
+                      output wire [31:0]  disk_wdata,
+                      output wire [3:0]   disk_wstrb, 
                       input wire         disk_response_enable,
                       input wire [31:0]  disk_data,
                       

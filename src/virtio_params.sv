@@ -31,7 +31,4 @@ typedef struct {
    reg [31:0]  len;
 } VRingUsedElem;
 
-localparam VIRTIO_BLK_T_IN = 0;
-localparam VIRTIO_BLK_T_OUT = 1;
-
 `endif
