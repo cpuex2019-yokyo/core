@@ -821,7 +821,7 @@ module core
                
                // start to load (rs1) ... d -> m
                mem_enabled <= 1;          
-               mem_arg <= register.rs1; // load addr: rs1
+               mem_arg <= register_d_out.rs1; // load addr: rs1
             end else begin
                state <= EXEC;
 
@@ -879,6 +879,7 @@ module core
             // TODO(future): implement wfi correctly, although the spec says regarding wfi as nop is legal...
             if (instr.fence || instr.fencei || instr.wfi) begin
                state <= WRITE;
+               write_enabled <= 1;
             end else if (instr.mret) begin
                state <= TRAP;                  
                if (cpu_mode >= CPU_M) begin

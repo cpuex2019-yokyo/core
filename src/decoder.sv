@@ -299,11 +299,16 @@ module decoder
             
             instr.writes_to_reg <= !(_is_conditional_jump
                                      || _is_store
-                                     || _csrop
+                                     // rv32i others
                                      || _fence
                                      || _fencei
                                      || _ecall
-                                     || _ebreak);            
+                                     || _ebreak
+                                     // rv32s
+                                     || _mret
+                                     || _sret
+                                     || _wfi
+                                     || _sfence_vma);            
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
