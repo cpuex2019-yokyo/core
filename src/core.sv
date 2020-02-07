@@ -27,7 +27,6 @@ module core
    input wire         ext_intr,
 
    // from CLINT
-   input wire         software_intr,
    input wire         timer_intr,
    input wire [63:0]  time_full,
 
@@ -44,7 +43,20 @@ module core
    (* mark_debug = "true" *) instructions instr;
    (* mark_debug = "true" *) regvpair register;
    (* mark_debug = "true" *) cpu_mode_t cpu_mode;   
-   (* mark_debug = "true" *) enum reg [5:0]      {INIT, FETCH, DECODE, EXEC, EXEC_PRIV, EXEC_ATOM1, EXEC_ATOM2, MEM, WRITE, ATOM1, ATOM2, TRAP} state;
+   (* mark_debug = "true" *) enum reg [5:0]      {
+                                                  INIT, 
+                                                  FETCH, 
+                                                  DECODE, 
+                                                  EXEC, 
+                                                  EXEC_PRIV, 
+                                                  EXEC_ATOM1, 
+                                                  EXEC_ATOM2, 
+                                                  MEM, 
+                                                  WRITE, 
+                                                  ATOM1, 
+                                                  ATOM2, 
+                                                  TRAP
+                                                  } state;
    const cpu_mode_t cpu_mode_base = CPU_U;
 
    // registers
@@ -107,10 +119,13 @@ module core
    endtask
    
    reg [31:0]         _mip;
-   wire [31:0]        intr_mask = {20'b0, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 3'b0};
+   wire               software_intr = |(_mip[3:0]);
+   wire               software_intr_m = _mip[3];
+   wire               software_intr_s = _mip[2];   
+   wire [31:0]        intr_mask = {20'b0, 4'b1000, 4'b1000, 4'b0000};
    task write_mip (input [31:0] value);
       begin
-         _mip <= (value & (~intr_mask)) | ({20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0} & intr_mask);
+         _mip <= (value & (~intr_mask)) | ({20'b0, ext_intr, 3'b0, timer_intr, 3'b0, 4'b0} & intr_mask);
       end
    endtask
    
@@ -307,17 +322,19 @@ module core
    
    // interrupts
    /////////
-   wire                is_interrupted = (((ext_intr && _mie[11]) || (timer_intr && _mie[7]) || (software_intr && _mie[3])) 
-                                         && ((_mstatus_mie && cpu_mode == CPU_M) || (CPU_M > cpu_mode)))
-                       || (((_mideleg[11] && ext_intr && _mie[11]) || (_mideleg[7] && timer_intr && _mie[7]) || (_mideleg[3] && software_intr && _mie[3]))
-                           && ((cpu_mode == CPU_S && _mstatus_sie) || CPU_S > cpu_mode));
-   
-   task update_pending_bits;
-      begin
-         _mip <= _mip | {20'b0, ext_intr, 3'b0, timer_intr, 3'b0, software_intr, 3'b0};
-      end
-   endtask
-   
+   wire                is_interrupted = 
+                       (((ext_intr && _mie[11]) // for M-mode trap
+                         || (timer_intr && _mie[7]) 
+                         || (software_intr_m && _mie[3])) 
+                        && ((_mstatus_mie && cpu_mode == CPU_M)
+                            || (CPU_M > cpu_mode)))
+                       || (((_mideleg[11] && ext_intr && _mie[11]) // for S-mode trap 
+                            || (_mideleg[7] && timer_intr && _mie[7]) 
+                            || (_mideleg[3] && software_intr_m && _mie[3])
+                            || (software_instr_s && _mie[1]))
+                           && ((cpu_mode == CPU_S && _mstatus_sie) 
+                               || CPU_S > cpu_mode));
+      
    reg [4:0]         exception_number;   
    reg [31:0]        exception_tval;        
    task raise_illegal_instruction(input [31:0] _tval);
@@ -883,14 +900,14 @@ module core
             end else if (instr.mret) begin
                state <= TRAP;                  
                if (cpu_mode >= CPU_M) begin
-                  // TODO
+                  // TODO(tentative): is there any process to be done?
                end else begin
                   raise_illegal_instruction(instr_raw);            
                end
             end else if (instr.sret) begin
                state <= TRAP;                  
                if (cpu_mode >= CPU_S) begin
-                  // TODO
+                  // TODO(tentative): is there any process to be done?
                end else begin
                   raise_illegal_instruction(instr_raw);            
                end
@@ -951,7 +968,7 @@ module core
                // mstatus.mpie <= 1;
                // mstatus.mpp <= 0;
                cpu_mode <= cpu_mode_base.next(_mstatus_mpp);               
-               _mstatus <= {_mstatus[31:13], 2'b0, _mstatus[10:8], 1'b1, _mstatus[6:4], _mstatus_mpie, _mstatus[2:0]};               
+               _mstatus <= {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], 1'b1, _mstatus[6:4], _mstatus_mpie, _mstatus[2:0]};               
             end else if (instr.sret) begin
                // trap by instruction
                pc <= _sepc;
@@ -959,28 +976,42 @@ module core
                // mstatus.spie <= 1;
                // mstatus.spp <= 0;
                cpu_mode <= cpu_mode_base.next(_mstatus_spp);               
-               _mstatus <= {_mstatus[31:9], 1'b0, _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};               
+               _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};               
             end else if (is_interrupted) begin
                // trap by interrupt
                // NOTE: is the value of *epc correct?
+               // TODO(linux): cover all patterns of interrupt
                if (ext_intr && _mie[11]) begin
-                  // ext
+                  // ext intr
                   set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
                   set_epc(_mideleg[11]? CPU_S : CPU_M, instr.pc);                  
                   set_cause(_mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
                   set_tval(_mideleg[11]? CPU_S : CPU_M, 32'd0);
-               end else if (software_intr && _mie[3]) begin
-                  // software
-                  set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);                  
+                  _mstatus <= _mideleg[11]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
+                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
+               end else if (software_intr_m && _mie[3]) begin
+                  // software intr (M)
+                  set_pc_by_tvec(1'b1, _mideleg[3]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);                  
                   set_epc(_mideleg[3]? CPU_S : CPU_M, instr.pc);                  
                   set_cause(_mideleg[3]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);
                   set_tval(_mideleg[3]? CPU_S : CPU_M, 32'd0);
+                  _mstatus <= _mideleg[3]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
+                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
+               end else if (software_intr_s && _mie[1]) begin
+                  // software intr (S)
+                  set_pc_by_tvec(1'b1, CPU_S, 32'd3);
+                  set_epc(CPU_S, instr.pc);        
+                  set_cause(CPU_S, 32'd3);
+                  set_tval(CPU_S, 32'd0);
+                  _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]};                  
                end else if (timer_intr && _mie[7]) begin
-                  // timer
-                  set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);                  
+                  // timer intr
+                  set_pc_by_tvec(1'b1, _mideleg[7]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);                  
                   set_epc(_mideleg[7]? CPU_S : CPU_M, instr.pc);                  
                   set_cause(_mideleg[7]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);
                   set_tval(_mideleg[7]? CPU_S : CPU_M, 32'd0);
+                  _mstatus <= _mideleg[7]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
+                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
                end
             end else begin
                // trap by exception (e.g. memory)
@@ -988,6 +1019,8 @@ module core
                set_epc(_medeleg[exception_number]? CPU_S : CPU_M, instr.pc);                  
                set_cause(_medeleg[exception_number]? CPU_S : CPU_M, {27'b0, exception_number});
                set_tval(_medeleg[exception_number]? CPU_S : CPU_M, exception_tval);               
+               _mstatus <= _medeleg[exception_number]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
+                           {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
             end
          end else begin
             // In the next clock after enabling *_enabled, we have to pull down them to zero.

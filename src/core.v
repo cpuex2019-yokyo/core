@@ -26,7 +26,6 @@ module core_wrapper
    input wire         ext_intr,
 
    // from CLINT
-   input wire         software_intr,
    input wire         timer_intr,
    input wire [63:0]  time_full,
    
@@ -58,7 +57,6 @@ module core_wrapper
       
               .ext_intr(ext_intr),
               
-              .software_intr(software_intr),
               .timer_intr(timer_intr),
               .time_full(time_full),
 
