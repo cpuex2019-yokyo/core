@@ -26,14 +26,12 @@ module clint(
 	         input wire        axi_wvalid,
 
 	         output reg [63:0] mtime,
-	         output reg        software_intr,
 	         output wire       time_intr,
 
 	         input wire        clk,
 	         input wire        rstn
              );
 
-   localparam software_intr_addr = 32'h0;
    localparam mtimecmp_addr = 32'h4000;
    localparam mtime_addr = 32'hbff8;		// Read Only
 
@@ -51,16 +49,13 @@ module clint(
 		 axi_bvalid <= 1'b0;
 		 axi_awready <= 1'b1;
 		 axi_wready <= 1'b1;
-		 software_intr <= 1'b0;
 		 mtime <= 64'h0;
 	  end else begin
 		 mtime <= mtime + 64'h1;
 		 if(axi_arvalid) begin
 			axi_rvalid <= 1'b1;
 			axi_rresp <= 2'b00;
-			if(axi_araddr == software_intr_addr) begin
-			   axi_rdata <= {31'h0, software_intr};
-			end else if(axi_araddr == mtimecmp_addr) begin
+			if(axi_araddr == mtimecmp_addr) begin
 			   axi_rdata <= mtimecmp[31:0];
 			end else if(axi_araddr == mtimecmp_addr + 32'h4) begin
 			   axi_rdata <= mtimecmp[63:32];
@@ -78,9 +73,7 @@ module clint(
 		 if(axi_awvalid && axi_wvalid) begin
 			axi_bvalid <= 1'b1;
 			axi_bresp <= 2'b00;
-			if(axi_awaddr == software_intr_addr) begin
-			   if(axi_wstrb[0]) software_intr <= axi_wdata[0];
-			end else if(axi_awaddr == mtimecmp_addr) begin
+			if(axi_awaddr == mtimecmp_addr) begin
 			   if(axi_wstrb[0]) mtimecmp[7:0] <= axi_wdata[7:0];
 			   if(axi_wstrb[1]) mtimecmp[15:8] <= axi_wdata[15:8];
 			   if(axi_wstrb[2]) mtimecmp[23:16] <= axi_wdata[23:16];
