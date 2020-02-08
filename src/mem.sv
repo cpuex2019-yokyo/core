@@ -49,37 +49,26 @@ module mem(
    initial begin
       init();
    end
-
+   // NOTE: amo* uses register.rs1 to tell the address and others use arg.
+   wire [31:0] _addr = (is_a_write|is_a_read)? register.rs1 : arg;
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && enabled) begin
-            if (instr.is_load) begin
+            if (instr.is_load || is_a_read) begin
                completed <= 0;
 
                state <= WAITING_DONE;
                mode <= MEMREQ_READ;
-               addr <= {arg[31:2], 2'b0};
-               request_enable <= 1;
-            end else if (is_a_read) begin
-               completed <= 0;
-
-               state <= WAITING_DONE;
-               mode <= MEMREQ_READ;
-               addr <= arg;               
+               addr <= {_addr[31:2], 2'b0};
                request_enable <= 1;
             end else if (instr.is_store || is_a_write) begin
                completed <= 0;
 
                state <= WAITING_DONE;
                mode <= MEMREQ_WRITE;
-
-               if (is_a_write) begin
-                  addr <= register.rs1;                  
-               end else begin
-                  addr <= {arg[31:2], 2'b0};
-               end
+               addr <= {_addr[31:2], 2'b0};
                if(instr.sb) begin
-                  case(addr[1:0])
+                  case(_addr[1:0])
                     2'b11 : begin
                        wstrb <= 4'b1000;
                        wdata <= {register.rs2[7:0], 24'b0};
@@ -98,7 +87,7 @@ module mem(
                     end
                   endcase
                end else if (instr.sh) begin
-                  case(addr[1:0])
+                  case(_addr[1:0])
                     2'b10 : begin
                        wstrb <= 4'b1100;
                        wdata <= {register.rs2[15:0], 16'b0};
@@ -125,7 +114,7 @@ module mem(
             state <= WAITING_REQUEST;
 
             if (instr.lb) begin
-               case(addr[1:0])
+               case(_addr[1:0])
                  2'b11: result <= {{24{data[31]}}, data[31:24]};
                  2'b10: result <= {{24{data[23]}}, data[23:16]};
                  2'b01: result <= {{24{data[15]}}, data[15:8]};
@@ -133,7 +122,7 @@ module mem(
                  default: result <= 32'b0;
                endcase
             end else if (instr.lh) begin
-               case(addr[1:0])
+               case(_addr[1:0])
                  2'b10 : result <= {{16{data[31]}}, data[31:16]};
                  2'b00 : result <= {{16{data[15]}}, data[15:0]};
                  default: result <=  32'b0;
@@ -141,7 +130,7 @@ module mem(
             end else if (instr.lw) begin
                result <= data;
             end else if (instr.lbu) begin
-               case(addr[1:0])
+               case(_addr[1:0])
                  2'b11: result = {24'b0, data[31:24]};
                  2'b10: result <= {24'b0, data[23:16]};
                  2'b01: result <= {24'b0, data[15:8]};
@@ -149,7 +138,7 @@ module mem(
                  default: result <= 32'b0;
                endcase
             end else if (instr.lhu) begin
-               case(addr[1:0])
+               case(_addr[1:0])
                  2'b10 : result <= {16'b0, data[31:16]};
                  2'b00 : result <= {16'b0, data[15:0]};
                  default: result <= 32'b0;
