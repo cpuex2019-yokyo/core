@@ -331,12 +331,12 @@ module core
                        || (((_mideleg[11] && ext_intr && _mie[11]) // for S-mode trap 
                             || (_mideleg[7] && timer_intr && _mie[7]) 
                             || (_mideleg[3] && software_intr_m && _mie[3])
-                            || (software_instr_s && _mie[1]))
+                            || (software_intr_s && _mie[1]))
                            && ((cpu_mode == CPU_S && _mstatus_sie) 
                                || CPU_S > cpu_mode));
-      
-   reg [4:0]         exception_number;   
-   reg [31:0]        exception_tval;        
+   
+   reg [4:0]           exception_number;   
+   reg [31:0]          exception_tval;        
    task raise_illegal_instruction(input [31:0] _tval);
       begin
          exception_number <= 5'd2;         
@@ -608,11 +608,11 @@ module core
    task set_pc_by_tvec(input is_asynchronous, input  [1:0] next_cpu_mode, input [4:0] vec);
       begin
          if (cpu_mode_base.next(next_cpu_mode) == CPU_M) begin
-            pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? _mtvec:
-                  _mtvec + 4 * vec;
+            pc <= (_mtvec[1:0] == 0 | ~is_asynchronous)? {_mtvec[31:2], 2'b0}:
+                  {_mtvec[31:2], 2'b0} + 4 * vec;
          end else if (cpu_mode_base.next(next_cpu_mode) == CPU_S) begin
-            pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? _stvec:
-                  _stvec + 4 * vec;         
+            pc <= (_stvec[1:0] == 0 | ~is_asynchronous)? {_stvec[31:2], 2'b0}:
+                  {_stvec[31:2], 2'b0} + 4 * vec;         
          end
       end  
    endtask
