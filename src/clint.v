@@ -50,6 +50,7 @@ module clint(
 		 axi_awready <= 1'b1;
 		 axi_wready <= 1'b1;
 		 mtime <= 64'h0;
+		 mtimecmp <= ~64'b0;
 	  end else begin
 		 mtime <= mtime + 64'h1;
 		 if(axi_arvalid) begin
