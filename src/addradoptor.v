@@ -2,12 +2,13 @@
 module adoptor #(
                  parameter OFFSET = 0,
                  parameter BASE = 0,
-                 parameter LEFT_SHIFT = 0                 
+                 parameter LEFT_SHIFT = 0,
+                 parameter DEST_WIDTH = 32           
                  ) (
                     // master (to)
                     input wire clk,
                     
-                    output wire [31:0] m_araddr,
+                    output wire [DEST_WIDTH-1:0] m_araddr,
                     input wire         m_arready,
                     output wire        m_arvalid,
                     output wire [2:0]  m_arprot,
@@ -21,7 +22,7 @@ module adoptor #(
                     input wire [1:0]   m_rresp,
                     input wire         m_rvalid,
 
-                    output wire [31:0] m_awaddr,
+                    output wire [DEST_WIDTH-1:0] m_awaddr,
                     input wire         m_awready,
                     output wire        m_awvalid,
                     output wire [2:0]  m_awprot,
@@ -57,7 +58,8 @@ module adoptor #(
 	                input wire         s_wvalid);
    
    wire [31:0] s_araddr_offset = s_araddr - BASE;
-   assign m_araddr = {s_araddr_offset[31-LEFT_SHIFT:0], {(LEFT_SHIFT){1'b0}}} + OFFSET;
+   wire [31:0] s_araddr_proceeded =  {s_araddr_offset[31-LEFT_SHIFT:0], {(LEFT_SHIFT){1'b0}}} + OFFSET;
+   assign m_araddr = s_araddr_proceeded[DEST_WIDTH-1:0];
    assign s_arready = m_arready;
    assign m_arvalid = s_arvalid;
    assign m_arprot = s_arprot;
@@ -72,7 +74,8 @@ module adoptor #(
    assign s_rvalid = m_rvalid;
    
    wire [31:0] s_awaddr_offset = s_awaddr - BASE;
-   assign m_awaddr = {s_awaddr_offset[31-LEFT_SHIFT:0], {(LEFT_SHIFT){1'b0}}} + OFFSET;
+   wire [31:0] s_awaddr_proceeded = {s_awaddr_offset[31-LEFT_SHIFT:0], {(LEFT_SHIFT){1'b0}}} + OFFSET;
+   assign m_awaddr = s_awaddr_proceeded[DEST_WIDTH-1:0];
    assign s_awready = m_awready;
    assign m_awvalid = s_awvalid;
    assign m_awprot = s_awprot;

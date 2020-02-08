@@ -64,8 +64,8 @@ module core
    (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
    (* mark_debug = "true" *) wire [31:0]        reg_w_data;
    (* mark_debug = "true" *) wire               reg_w_enable;
-   instructions instr_d_out;
-   regvpair register_d_out;         
+   (* mark_debug = "true" *) instructions instr_d_out;
+   (* mark_debug = "true" *) regvpair register_d_out;         
    registers _registers(.clk(clk),
                         .rstn(rstn),
                         .r_enabled(is_fetch_done),
@@ -87,7 +87,7 @@ module core
    wire [31:0]        _mimpid = 32'b0;
    wire [31:0]        _mhartid = 32'b0;
 
-   reg [31:0]         _mstatus;
+   (* mark_debug = "true" *) reg [31:0]         _mstatus;
    wire               _mstatus_mie = _mstatus[3];   
    wire               _mstatus_sie = _mstatus[1];   
    wire               _mstatus_tvm = _mstatus[20];   
@@ -102,7 +102,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _medeleg;
+   (* mark_debug = "true" *) reg [31:0]         _medeleg;
    wire [31:0]        delegable_excps = 32'hbfff;   
    task write_medeleg (input [31:0] value);
       begin
@@ -110,7 +110,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _mideleg;
+   (* mark_debug = "true" *) reg [31:0]         _mideleg;
    wire [31:0]        delegable_ints = 32'h222;   
    task write_mideleg (input [31:0] value);
       begin
@@ -118,7 +118,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _mip;
+   (* mark_debug = "true" *) reg [31:0]         _mip;
    wire               software_intr = |(_mip[3:0]);
    wire               software_intr_m = _mip[3];
    wire               software_intr_s = _mip[2];   
@@ -130,7 +130,7 @@ module core
    endtask
    
    
-   reg [31:0]         _mie;
+   (* mark_debug = "true" *) reg [31:0]         _mie;
    wire [31:0]        all_ints = 32'haaa;   
    task write_mie (input [31:0] value);
       begin
@@ -138,7 +138,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _mtvec;
+   (* mark_debug = "true" *) reg [31:0]         _mtvec;
    task write_mtvec (input [31:0] value);
       begin
          if (value & 3 < 2) begin
@@ -147,11 +147,11 @@ module core
       end
    endtask
    
-   reg [63:0]         _mcycle_full;   
+   (* mark_debug = "true" *) reg [63:0]         _mcycle_full;   
    wire [31:0]        _mcycle = _mcycle_full[31:0];   
    wire [31:0]        _mcycleh = _mcycle_full[63:32];
 
-   reg [63:0]         _minstret_full;   
+   (* mark_debug = "true" *) reg [63:0]         _minstret_full;   
    wire [31:0]        _minstret = _minstret_full[31:0];   
    wire [31:0]        _minstreth = _minstret_full[63:32];
    
@@ -183,7 +183,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _mtval;
+   (* mark_debug = "true" *) reg [31:0]         _mtval;
    task write_mtval (input [31:0] value);
       begin
          _mtval <= value;         
@@ -191,7 +191,7 @@ module core
    endtask
 
    // TODO(linux): implmenent PMP appropriately   
-   reg [8 * 16 - 1:0]       _pmpcfg;
+   (* mark_debug = "true" *) reg [8 * 16 - 1:0]       _pmpcfg;
    // function [31:0] read_pmpcfg (input [31:0] value, input [3:0] idx);
    //    begin
    //       if(value & 1 == 0) begin
@@ -209,7 +209,7 @@ module core
       end
    endtask 
    
-   reg [31:0]       _pmpaddr[0:15];
+   (* mark_debug = "true" *) reg [31:0]       _pmpaddr[0:15];
    task write_pmpaddr (input [31:0] value, input [3:0] idx);
       begin
          _pmpaddr[idx] = value;         
@@ -228,14 +228,14 @@ module core
    // TODO(future): implement user-level trap   
    // reg [31:0]       _sedeleg;
    //reg [31:0]       _sideleg;
-   reg [31:0]       _sie = _mie & _mideleg;
+   (* mark_debug = "true" *) reg [31:0]       _sie = _mie & _mideleg;
    task write_sie (input [31:0] value);
       begin
          write_mie((_mie & ~(_mideleg)) | (value & (_mideleg)));
       end
    endtask
    
-   reg [31:0]       _stvec;
+   (* mark_debug = "true" *) reg [31:0]       _stvec;
    task write_stvec (input [31:0] value);
       begin
          if (value & 3 < 2) begin
@@ -244,35 +244,35 @@ module core
       end
    endtask
    
-   reg [31:0]      _scounteren;
+   (* mark_debug = "true" *) reg [31:0]      _scounteren;
    task write_scounteren (input [31:0] value);
       begin
          _scounteren <= value;         
       end
    endtask
    
-   reg [31:0]         _sscratch;
+   (* mark_debug = "true" *) reg [31:0]         _sscratch;
    task write_sscratch (input [31:0] value);
       begin
          _sscratch <= value;         
       end
    endtask
    
-   reg [31:0]         _sepc;
+   (* mark_debug = "true" *) reg [31:0]         _sepc;
    task write_sepc (input [31:0] value);
       begin
          _sepc <= value;         
       end
    endtask
    
-   reg [31:0]         _scause;   
+   (* mark_debug = "true" *) reg [31:0]         _scause;   
    task write_scause (input [31:0] value);
       begin
          _scause <= value;         
       end
    endtask
    
-   reg [31:0]         _stval;   
+   (* mark_debug = "true" *) reg [31:0]         _stval;   
    task write_stval (input [31:0] value);
       begin
          _stval <= value;         
@@ -288,7 +288,7 @@ module core
       end
    endtask
    
-   reg [31:0]         _satp;
+   (* mark_debug = "true" *) reg [31:0]         _satp;
    task write_satp (input [31:0] value);
       begin
          if (_mstatus_tvm && cpu_mode == CPU_S) begin
@@ -335,8 +335,8 @@ module core
                            && ((cpu_mode == CPU_S && _mstatus_sie) 
                                || CPU_S > cpu_mode));
    
-   reg [4:0]           exception_number;   
-   reg [31:0]          exception_tval;        
+   (* mark_debug = "true" *) reg [4:0]           exception_number;   
+   (* mark_debug = "true" *) reg [31:0]          exception_tval;        
    task raise_illegal_instruction(input [31:0] _tval);
       begin
          exception_number <= 5'd2;         
@@ -427,8 +427,8 @@ module core
    (* mark_debug = "true" *) wire               is_exec_done;
 
    // stage input
-   reg                 is_csr_valid;
-   reg [31:0]          csr_value;   
+   (* mark_debug = "true" *) reg                 is_csr_valid;
+   (* mark_debug = "true" *) reg [31:0]          csr_value;   
 
    // stage outputs
    (* mark_debug = "true" *) wire [31:0]        exec_result;
@@ -494,7 +494,7 @@ module core
    (* mark_debug = "true" *) wire               is_write_done;
 
    // stage input
-   reg [31:0]          data_to_write;
+   (* mark_debug = "true" *) reg [31:0]          data_to_write;
 
    write _write(.clk(clk),
                 .rstn(rstn),
