@@ -33,7 +33,12 @@ module core_wrapper
    output wire [31:0] o_satp,
    output wire [1:0]  o_cpu_mode,
    output wire        o_mxr,
-   output wire        o_sum
+   output wire        o_sum,
+
+   // from MMU
+   input wire [4:0]   mem_exception_vec,
+   input wire         mem_exception_enabled,
+   input wire [31:0]  mem_exception_tval   
    );   
 
    core _core(.clk(clk),
@@ -63,7 +68,11 @@ module core_wrapper
               .o_satp(o_satp),
               .o_cpu_mode(o_cpu_mode),
               .o_mxr(o_mxr),
-              .o_sum(o_sum));   
+              .o_sum(o_sum),
+
+              .mem_exception_vec(mem_exception_vec),              
+              .mem_exception_enable(mem_exception_enable),
+              .mem_exception_tval(mem_exception_tval));   
    
 endmodule
 

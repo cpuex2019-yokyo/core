@@ -14,19 +14,20 @@ module mmu_wrapper (
                     input wire [31:0]  freq_addr,
                     input wire [31:0]  freq_wdata,
                     input wire [3:0]   freq_wstrb,
-                    output wire         fetch_response_enable,
-                    output wire [31:0]  fresp_data,
+                    output wire        fetch_response_enable,
+                    output wire [31:0] fresp_data,
 
                     input wire         mem_request_enable,
                     input wire         mreq_mode,
                     input wire [31:0]  mreq_addr,
                     input wire [31:0]  mreq_wdata,
                     input wire [3:0]   mreq_wstrb,
-                    output wire         mem_response_enable,
-                    output wire [31:0]  mresp_data,
+                    output wire        mem_response_enable,
+                    output wire [31:0] mresp_data,
 
-                    output wire [4:0]   exception_vec,
-                    output wire         page_fault, 
+                    output reg [4:0]   exception_vec,
+                    output reg [31:0]  exception_tval,
+                    output reg         is_exception_occured,
 
                     output wire        request_enable,
                     output wire        req_mode,
@@ -62,7 +63,8 @@ module mmu_wrapper (
             .mresp_data(mresp_data),
 
             .exception_vec(exception_vec),
-            .page_fault(page_fault),
+            .exception_tval(exception_tval),
+            .exception_enable(exception_enable),
 
             .request_enable(request_enable),
             .req_mode(req_mode),

@@ -27,7 +27,8 @@ module mmu(
            output reg [31:0] mresp_data,
 
            output reg [4:0]  exception_vec,
-           output reg        page_fault, 
+           output reg [31:0] exception_tval,
+           output reg        exception_enable,
 
            output reg        request_enable,
            output reg        req_mode,
@@ -106,9 +107,10 @@ module mmu(
 
    task raise_pagefault_exception;
       begin
-         page_fault <= 1'b1;         
+         exception_enable <= 1'b1;         
          exception_vec <= _mode == MEMREQ_READ? 5'd13: // load page fault
-                          5'd15; // store/amo page fault                             
+                          5'd15; // store/amo page fault
+         exception_tval <= _vaddr;         
          state <= WAITING_RECEIVE;
          if (operation_cause == CAUSE_FETCH) begin
             fetch_response_enable <= 1'b1;               
@@ -210,7 +212,7 @@ module mmu(
       if(rstn) begin
          if (state == WAITING_REQUEST && fetch_request_enable) begin
             exception_vec <= 5'b0;
-            page_fault <= 1'b0;
+            exception_enable <= 1'b0;
             operation_cause <= CAUSE_FETCH;            
             if (paging_mode == 0) begin
                state <= WAITING_RESPONSE;
@@ -233,7 +235,7 @@ module mmu(
             end
          end else if (state == WAITING_REQUEST & mem_request_enable) begin
             exception_vec <= 5'b0;
-            page_fault <= 1'b0;
+            exception_enable <= 1'b0;
             operation_cause <= CAUSE_MEM;            
             if (paging_mode == 0) begin
                state <= WAITING_RESPONSE;
@@ -248,7 +250,7 @@ module mmu(
                request_enable <= 1'b1;
                req_mode <= MEMREQ_READ;
                req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
-                          
+               
                _vaddr <= mreq_addr;
                _mode <= mreq_mode;
                _wdata <= mreq_wdata;
