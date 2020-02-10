@@ -150,7 +150,7 @@ module core
    (* mark_debug = "true" *) reg [31:0]         _mtvec;
    task write_mtvec (input [31:0] value);
       begin
-         if (value & 3 < 2) begin
+         if ((value & 32'h3) < 32'h2) begin
             _mtvec <= value;            
          end
       end
@@ -247,7 +247,7 @@ module core
    (* mark_debug = "true" *) reg [31:0]       _stvec;
    task write_stvec (input [31:0] value);
       begin
-         if (value & 3 < 2) begin
+         if ((value & 32'h3) < 32'h2) begin
             _stvec <= value;            
          end
       end
