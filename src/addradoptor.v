@@ -6,6 +6,7 @@ module adoptor #(
                  ) (
                     // master (to)
                     input wire                  clk,
+                    input wire                  rstn,
 
                     output reg [DEST_WIDTH-1:0] m_araddr,
                     input wire                  m_arready,
@@ -94,55 +95,61 @@ module adoptor #(
    always @(posedge clk) begin
       if (rstn) begin
          // read
-         if (s_arvalid) begin
+         if (s_arready && s_arvalid) begin
             s_arready <= 1'b0;
             
             m_arvalid <= 1'b1;
             m_araddr <= s_araddr_proceeded[DEST_WIDTH-1:0];
             m_arprot <= s_arprot;
          end
-         if (m_arready) begin
+         if (m_arvalid && m_arready) begin
             m_arvalid <= 0;
             m_rready <= 1'b1;         
          end
-         if (m_rvalid) begin
+         if (m_rready && m_rvalid) begin
             m_rready <= 1'b0;
             
             s_rvalid <= 1'b1;         
             s_rdata <= m_rdata;
             s_rresp <= m_rresp;
          end
-         if (s_rready) begin
+         if (s_rvalid && s_rready) begin
             s_rvalid <= 1'b0;
             s_arready <= 1'b1;         
          end
 
          // write
-         if (s_awvalid) begin
+         if (s_awready && s_awvalid) begin
             s_awready <= 1'b0;
             
             m_awvalid <= 1'b1;
             m_awaddr <= s_awaddr_proceeded[DEST_WIDTH-1:0];
             m_awprot <= s_awprot;
          end            
-         if (s_wvalid) begin
+         if (s_wready && s_wvalid) begin
             s_wready <= 1'b0;
             
             m_wvalid <= 1'b1;         
             m_wdata <= s_wdata;
             m_wstrb <= s_wstrb;
          end
+         if (m_awvalid && m_awready) begin
+            m_awvalid <= 1'b0;
+         end
+         if (m_wvalid && m_wready) begin
+            m_wvalid <= 1'b0;
+         end
          if (!s_awready && !s_wready) begin
             m_bready <= 1'b1;         
          end
-         if (m_bvalid) begin
+         if (m_bready && m_bvalid) begin
             m_bready <= 1'b0;
 
             s_bvalid <= 1'b1;         
             s_bresp <= m_bresp;
             s_bvalid <= m_bvalid;
          end
-         if (s_bready) begin
+         if (s_bvalid && s_bready) begin
             s_bvalid <= 1'b0;
 
             s_awready <= 1'b1;
