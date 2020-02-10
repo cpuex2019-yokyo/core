@@ -37,7 +37,7 @@ module core_wrapper
 
    // from MMU
    input wire [4:0]   mem_exception_vec,
-   input wire         mem_exception_enabled,
+   input wire         mem_exception_enable,
    input wire [31:0]  mem_exception_tval   
    );   
 

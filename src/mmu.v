@@ -25,9 +25,9 @@ module mmu_wrapper (
                     output wire        mem_response_enable,
                     output wire [31:0] mresp_data,
 
-                    output reg [4:0]   exception_vec,
-                    output reg [31:0]  exception_tval,
-                    output reg         is_exception_occured,
+                    output wire [4:0]   exception_vec,
+                    output wire [31:0]  exception_tval,
+                    output wire         exception_enable,
 
                     output wire        request_enable,
                     output wire        req_mode,

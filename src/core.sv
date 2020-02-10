@@ -1046,7 +1046,7 @@ module core
                // mstatus.spp <= 0;
                cpu_mode <= cpu_mode_base.next(_mstatus_spp);               
                _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};
-            end else if begin
+            end else begin
                // trap by exception (e.g. memory)               
                set_pc_by_tvec(1'b0, _medeleg[exception_number]? CPU_S : CPU_M, 32'b0);
                set_epc(_medeleg[exception_number]? CPU_S : CPU_M, instr.pc);                  
