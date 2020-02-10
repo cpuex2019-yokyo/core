@@ -5,84 +5,152 @@ module adoptor #(
                  parameter DEST_WIDTH = 32           
                  ) (
                     // master (to)
-                    input wire                   clk,
+                    input wire                  clk,
 
                     output reg [DEST_WIDTH-1:0] m_araddr,
-                    input wire                   m_arready,
+                    input wire                  m_arready,
                     output reg                  m_arvalid,
                     output reg [2:0]            m_arprot,
 
                     output reg                  m_bready,
-                    input wire [1:0]             m_bresp,
-                    input wire                   m_bvalid,
+                    input wire [1:0]            m_bresp,
+                    input wire                  m_bvalid,
 
-                    input wire [31:0]            m_rdata,
+                    input wire [31:0]           m_rdata,
                     output reg                  m_rready,
-                    input wire [1:0]             m_rresp,
-                    input wire                   m_rvalid,
+                    input wire [1:0]            m_rresp,
+                    input wire                  m_rvalid,
 
                     output reg [DEST_WIDTH-1:0] m_awaddr,
-                    input wire                   m_awready,
+                    input wire                  m_awready,
                     output reg                  m_awvalid,
                     output reg [2:0]            m_awprot,
 
                     output reg [31:0]           m_wdata,
-                    input wire                   m_wready,
+                    input wire                  m_wready,
                     output reg [3:0]            m_wstrb,
                     output reg                  m_wvalid,
 
                     // slave (from)
-	                input wire [31:0]            s_araddr,
+	                input wire [31:0]           s_araddr,
 	                output reg                  s_arready,
-	                input wire                   s_arvalid,
-	                input wire [2:0]             s_arprot, 
+	                input wire                  s_arvalid,
+	                input wire [2:0]            s_arprot, 
 
-	                input wire                   s_bready,
+	                input wire                  s_bready,
 	                output reg [1:0]            s_bresp,
 	                output reg                  s_bvalid,
 
 	                output reg [31:0]           s_rdata,
-	                input wire                   s_rready,
+	                input wire                  s_rready,
 	                output reg [1:0]            s_rresp,
 	                output reg                  s_rvalid,
 
-	                input wire [31:0]            s_awaddr,
+	                input wire [31:0]           s_awaddr,
 	                output reg                  s_awready,
-	                input wire                   s_awvalid,
-	                input wire [2:0]             s_awprot, 
+	                input wire                  s_awvalid,
+	                input wire [2:0]            s_awprot, 
 
-	                input wire [31:0]            s_wdata,
+	                input wire [31:0]           s_wdata,
 	                output reg                  s_wready,
-	                input wire [3:0]             s_wstrb,
-	                input wire                   s_wvalid);
+	                input wire [3:0]            s_wstrb,
+	                input wire                  s_wvalid);
    
-   wire [31:0]                                   s_araddr_proceeded =  s_araddr - BASE + OFFSET;
-    wire [31:0]                                   s_awaddr_proceeded = s_awaddr - BASE + OFFSET;  
+   wire [31:0]                                  s_araddr_proceeded =  s_araddr - BASE + OFFSET;
+   wire [31:0]                                  s_awaddr_proceeded = s_awaddr - BASE + OFFSET;
+
+   task init;
+      begin
+         s_arready <= 1'b1;
+         
+         s_bresp <= 2'b0;
+         s_bvalid <= 1'b0;
+
+         s_rdata <= 32'b0;
+         s_rresp <= 2'b0;
+         s_rvalid <= 1'b0;
+         
+         s_awready <= 1'b1;
+         s_wready <= 1'b1;
+
+         m_araddr <= 0;
+         m_arvalid <= 1'b0;
+         m_arprot <= 3'b0;
+
+         m_bready <= 1'b0;
+         
+         m_rready <= 1'b0;
+
+         m_awaddr <= 0;
+         m_awvalid <= 1'b0;
+         m_awprot <= 3'b0;
+
+         m_wdata <= 32'b0;
+         m_wstrb <= 4'b0;
+         m_wvalid <= 1'b0;         
+      end
+   endtask
+   
    always @(posedge clk) begin
-   m_araddr <= s_araddr_proceeded[DEST_WIDTH-1:0];
-   s_arready <= m_arready;
-   m_arvalid <= s_arvalid;
-   m_arprot <= s_arprot;
+      if (rstn) begin
+         // read
+         if (s_arvalid) begin
+            s_arready <= 1'b0;
+            
+            m_arvalid <= 1'b1;
+            m_araddr <= s_araddr_proceeded[DEST_WIDTH-1:0];
+            m_arprot <= s_arprot;
+         end
+         if (m_arready) begin
+            m_arvalid <= 0;
+            m_rready <= 1'b1;         
+         end
+         if (m_rvalid) begin
+            m_rready <= 1'b0;
+            
+            s_rvalid <= 1'b1;         
+            s_rdata <= m_rdata;
+            s_rresp <= m_rresp;
+         end
+         if (s_rready) begin
+            s_rvalid <= 1'b0;
+            s_arready <= 1'b1;         
+         end
 
-  m_bready <= s_bready;
- s_bresp <= m_bresp;
- s_bvalid <= m_bvalid;
+         // write
+         if (s_awvalid) begin
+            s_awready <= 1'b0;
+            
+            m_awvalid <= 1'b1;
+            m_awaddr <= s_awaddr_proceeded[DEST_WIDTH-1:0];
+            m_awprot <= s_awprot;
+         end            
+         if (s_wvalid) begin
+            s_wready <= 1'b0;
+            
+            m_wvalid <= 1'b1;         
+            m_wdata <= s_wdata;
+            m_wstrb <= s_wstrb;
+         end
+         if (!s_awready && !s_wready) begin
+            m_bready <= 1'b1;         
+         end
+         if (m_bvalid) begin
+            m_bready <= 1'b0;
 
-s_rdata <= m_rdata;
-m_rready <= s_rready;
- s_rresp <= m_rresp;
-s_rvalid <= m_rvalid;
-   
+            s_bvalid <= 1'b1;         
+            s_bresp <= m_bresp;
+            s_bvalid <= m_bvalid;
+         end
+         if (s_bready) begin
+            s_bvalid <= 1'b0;
 
- m_awaddr <= s_awaddr_proceeded[DEST_WIDTH-1:0];
- s_awready <= m_awready;
-m_awvalid <= s_awvalid;
- m_awprot <= s_awprot;
-
-m_wdata <= s_wdata;
- s_wready <= m_wready;
- m_wstrb <= s_wstrb;
- m_wvalid <= s_wvalid;   
+            s_awready <= 1'b1;
+            s_wready <= 1'b1;
+         end
+      end else begin
+         init();
+      end         
    end
 endmodule
 
