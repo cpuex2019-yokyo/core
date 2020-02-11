@@ -106,6 +106,52 @@ module core
          _mstatus <= (_mstatus & ~(_mstatus_mask)) | (value & _mstatus_mask);         
       end
    endtask
+
+   task set_mstatus_by_trap(input [1:0] next_cpu_mode);
+      begin
+         if (next_cpu_mode == CPU_M) begin
+            _mstatus <= {_mstatus[31:13], 
+                         cpu_mode[1:0],  //mpp
+                         _mstatus[10:8], 
+                         _mstatus[3], // mpie
+                         _mstatus[6:4],
+                         1'b0, // mie
+                         _mstatus[2:0]}; // to M
+         end else begin
+            _mstatus <= {_mstatus[31:9], 
+                         cpu_mode[0], // spp 
+                         _mstatus[7:6], 
+                         _mstatus[1], //spie
+                         _mstatus[4:2], 
+                         1'b0, //sie
+                         _mstatus[0]};                  
+         end         
+      end
+   endtask
+
+   task set_mstatus_by_mret();      
+      begin
+         _mstatus <= {_mstatus[31:13], 
+                      2'b0, // mpp
+                      _mstatus[10:8], 
+                      1'b1, // mpie
+                      _mstatus[6:4], 
+                      _mstatus_mpie, // mie
+                      _mstatus[2:0]};               
+      end
+   endtask
+
+   task set_mstatus_by_sret();
+      begin
+         _mstatus <= {_mstatus[31:9], 
+                      1'b0, // spp
+                      _mstatus[7:6], 
+                      1'b1,  // spie
+                      _mstatus[4:2], 
+                      _mstatus_spie, // sie 
+                      _mstatus[0]};         
+      end
+   endtask
    
    (* mark_debug = "true" *) reg [31:0]         _medeleg;
    wire [31:0]        delegable_excps = 32'hbfff;   
@@ -345,6 +391,26 @@ module core
                             || (_mip[1] && _mie[1]))
                            && ((cpu_mode == CPU_S && _mstatus_sie) 
                                || CPU_S > cpu_mode));
+
+   wire [1:0]          next_cpu_mode_when_interrupted =
+                       (_mip[11] && _mie[11])? (_mideleg[11]? CPU_S : CPU_M):
+                       (_mip[9] && _mie[9])? CPU_S:
+                       (_mip[3] && _mie[3])? (_mideleg[3]? CPUS_S : CPU_M):
+                       (_mip[1] && _mie[1])? CPU_S:
+                       (_mip[7] && _mie[7])? (_mideleg[7]? CPU_S : CPU_M):
+                       (_mip[5] && _mie[5])? CPU_S:
+                       cpu_mode;   
+   
+   wire [31:0]         exception_vec_when_interrupted =
+                       (_mip[11] && _mie[11])? (_mideleg[11]? 32'd9 : 32'd11):
+                       (_mip[9] && _mie[9])? 32'd9:
+                       (_mip[3] && _mie[3])? (_mideleg[3]? 32'd1 : 32'd3):
+                       (_mip[1] && _mie[1])? 32'd1:
+                       (_mip[7] && _mie[7])? (_mideleg[7]? 32'd4 : 32'd7):
+                       (_mip[5] && _mie[5])? 32'd4:
+                       32'd0;
+   
+   wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;              
    
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
    (* mark_debug = "true" *) reg [31:0]          exception_tval;        
@@ -975,85 +1041,46 @@ module core
          end else if (state == TRAP) begin
             fetch_enabled <= 1;
             state <= FETCH;
-            
-            // state == TRAP
-            // - by interrupt
-            // - by exception
-            // - by instruction            
+
             if (is_interrupted) begin
-               // trap by interrupt
+               // trap by interrupts (async)
+               // when a trap is taken from y to x, 
+               // xstatus.mie <= 0;
+               // xstatus.mpie <= xstatus.mie;
+               // xstatus.mpp <= y;
                // NOTE: is the value of *epc correct?
                // TODO(linux): cover all patterns of interrupt
-               if (_mip[11] && _mie[11]) begin
-                  // ext intr (M)
-                  set_pc_by_tvec(1'b1, _mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
-                  set_epc(_mideleg[11]? CPU_S : CPU_M, instr.pc);                  
-                  set_cause(_mideleg[11]? CPU_S : CPU_M, _mideleg[11]? 32'd9 : 32'd11);                  
-                  set_tval(_mideleg[11]? CPU_S : CPU_M, 32'd0);
-                  _mstatus <= _mideleg[11]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
-                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
-               end else if (_mip[5] && _mie[5]) begin
-                  // ext intr (S)
-                  set_pc_by_tvec(1'b1, CPU_S, 32'd9);                  
-                  set_epc(CPU_S, instr.pc);                  
-                  set_cause(CPU_S, 32'd9);                  
-                  set_tval(CPU_S, 32'd0);
-                  _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}; // to S                   
-               end else if (_mip[3] && _mie[3]) begin
-                  // software intr (M)
-                  set_pc_by_tvec(1'b1, _mideleg[3]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);                  
-                  set_epc(_mideleg[3]? CPU_S : CPU_M, instr.pc);                  
-                  set_cause(_mideleg[3]? CPU_S : CPU_M, _mideleg[3]? 32'd1 : 32'd3);
-                  set_tval(_mideleg[3]? CPU_S : CPU_M, 32'd0);
-                  _mstatus <= _mideleg[3]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
-                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
-               end else if (_mip[1] && _mie[1]) begin
-                  // software intr (S)
-                  set_pc_by_tvec(1'b1, CPU_S, 32'd3);
-                  set_epc(CPU_S, instr.pc);        
-                  set_cause(CPU_S, 32'd3);
-                  set_tval(CPU_S, 32'd0);
-                  _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]};                  
-               end else if (_mip[7] && _mie[7]) begin
-                  // timer intr (M)
-                  set_pc_by_tvec(1'b1, _mideleg[7]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);                  
-                  set_epc(_mideleg[7]? CPU_S : CPU_M, instr.pc);                  
-                  set_cause(_mideleg[7]? CPU_S : CPU_M, _mideleg[7]? 32'd4 : 32'd7);
-                  set_tval(_mideleg[7]? CPU_S : CPU_M, 32'd0);
-                  _mstatus <= _mideleg[7]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
-                              {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
-               end else if (_mip[5] && _mie[5]) begin
-                  // timer intr (S)
-                  set_pc_by_tvec(1'b1, CPU_S, 32'd4);                  
-                  set_epc(CPU_S, instr.pc);                  
-                  set_cause(CPU_S, 32'd4);                  
-                  set_tval(CPU_S, 32'd0);
-                  _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}; // to S                   
-               end
+               cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
+               set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
+               
+               set_epc(next_cpu_mode, instr.pc);                  
+               set_cause(next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
+               set_tval(next_cpu_mode, 32'd0);
+               set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
             end else if (instr.mret) begin
-               // trap by instruction
-               pc <= _mepc;
+               // trap by instruction (sync)
                // mstatus.mie <= mstatus.mpie;
                // mstatus.mpie <= 1;
                // mstatus.mpp <= 0;
                cpu_mode <= cpu_mode_base.next(_mstatus_mpp);               
-               _mstatus <= {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], 1'b1, _mstatus[6:4], _mstatus_mpie, _mstatus[2:0]};               
-            end else if (instr.sret) begin
-               // trap by instruction
-               pc <= _sepc;
+               pc <= _mepc;
+               set_mstatus_by_mret();               
+            end else if (instr.sret) begin               
+               // trap by instruction (sync)
                // mstatus.sie <= mstatus.spie;
                // mstatus.spie <= 1;
                // mstatus.spp <= 0;
                cpu_mode <= cpu_mode_base.next(_mstatus_spp);               
-               _mstatus <= {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], 1'b1, _mstatus[4:2], _mstatus_spie, _mstatus[0]};
+               pc <= _sepc;
+               set_mstatus_by_sret();               
             end else begin
-               // trap by exception (e.g. memory)               
-               set_pc_by_tvec(1'b0, _medeleg[exception_number]? CPU_S : CPU_M, 32'b0);
-               set_epc(_medeleg[exception_number]? CPU_S : CPU_M, instr.pc);                  
-               set_cause(_medeleg[exception_number]? CPU_S : CPU_M, {27'b0, exception_number});
-               set_tval(_medeleg[exception_number]? CPU_S : CPU_M, exception_tval);               
-               _mstatus <= _medeleg[exception_number]? {_mstatus[31:9], cpu_mode[0], _mstatus[7:6], _mstatus[1], _mstatus[4:2], 1'b0, _mstatus[0]}: // to S
-                           {_mstatus[31:13], cpu_mode[1:0], _mstatus[10:8], _mstatus[3], _mstatus[6:4], 1'b0, _mstatus[2:0]}; // to M
+               // trap by exception (sync)
+               cpu_mode 
+                 set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);
+               set_epc(next_cpu_mode_when_exception, instr.pc);                  
+               set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
+               set_tval(next_cpu_mode_when_exception, exception_tval);
+               set_mstatus_by_trap(next_cpu_mode_when_exception);               
             end
          end else begin
             // In the next clock after enabling *_enabled, we have to pull down them to zero.
