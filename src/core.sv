@@ -103,7 +103,7 @@ module core
    wire [31:0]        _mstatus_mask = 32'h601e79aa;   
    task write_mstatus (input [31:0] value);
       begin
-         _mstatus <= (_mstatus & ~(_mstatus_mask)) | (value * _mstatus_mask);         
+         _mstatus <= (_mstatus & ~(_mstatus_mask)) | (value & _mstatus_mask);         
       end
    endtask
    
@@ -794,13 +794,13 @@ module core
          end else if (instr.csrrs) begin
             csr_v = original | register.rs1;
          end else if (instr.csrrc) begin
-            csr_v = original | ~(register.rs1);            
+            csr_v = original & ~(register.rs1);            
          end else if (instr.csrrwi) begin
             csr_v = {27'b0, instr.rs1};
          end else if (instr.csrrsi) begin
             csr_v = original | {27'b0, instr.rs1};
          end else if (instr.csrrci) begin
-            csr_v = original | ~({27'b0, instr.rs1});
+            csr_v = original & ~{27'b0, instr.rs1};
          end
       end
    endfunction 
