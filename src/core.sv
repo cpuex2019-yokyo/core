@@ -395,7 +395,7 @@ module core
    wire [1:0]          next_cpu_mode_when_interrupted =
                        (_mip[11] && _mie[11])? (_mideleg[11]? CPU_S : CPU_M):
                        (_mip[9] && _mie[9])? CPU_S:
-                       (_mip[3] && _mie[3])? (_mideleg[3]? CPUS_S : CPU_M):
+                       (_mip[3] && _mie[3])? (_mideleg[3]? CPU_S : CPU_M):
                        (_mip[1] && _mie[1])? CPU_S:
                        (_mip[7] && _mie[7])? (_mideleg[7]? CPU_S : CPU_M):
                        (_mip[5] && _mie[5])? CPU_S:
@@ -409,11 +409,11 @@ module core
                        (_mip[7] && _mie[7])? (_mideleg[7]? 32'd4 : 32'd7):
                        (_mip[5] && _mie[5])? 32'd4:
                        32'd0;
-   
-   wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;              
-   
+                       
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
    (* mark_debug = "true" *) reg [31:0]          exception_tval;        
+   wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;                 
+         
    task raise_illegal_instruction(input [31:0] _tval);
       begin
          exception_number <= 5'd2;         
@@ -441,7 +441,7 @@ module core
    task raise_ebreak;      
       begin
          exception_number <= 5'd3;         
-         exception_tval <= 32'd0; // NOTE: is it okay?         
+         exception_tval <= instr.pc; // NOTE: is it okay?         
       end
    endtask
    
@@ -972,7 +972,10 @@ module core
             is_jump_chosen <= is_jump_chosen_e_out;
             // TODO(future): implement wfi correctly.
             // Although the spec says regarding wfi as nop is legal...
-            if (instr.fence || instr.fencei || instr.wfi) begin
+            if (is_jump_chosen_e_out && jump_dest[1:0] != 2'b0) begin
+                state <= TRAP;
+                raise_instruction_address_misaligned(jump_dest);
+            end else if (instr.fence || instr.fencei || instr.wfi) begin
                state <= WRITE;
                write_enabled <= 1;
             end else if (instr.mret) begin
@@ -1021,16 +1024,10 @@ module core
                   state <= TRAP;            
                end else begin
                   if (is_jump_chosen) begin
-                     if (jump_dest[1:0] == 2'b0) begin
                         fetch_enabled <= 1;
                         state <= FETCH;
                         pc <= jump_dest;
                         is_jump_chosen <= 1'b0;
-                     end else begin
-                        state <= TRAP;
-                        //TODO: appropriate tval                        
-                        raise_instruction_address_misaligned(32'h0);
-                     end
                   end else begin
                      fetch_enabled <= 1;
                      state <= FETCH;
@@ -1053,9 +1050,9 @@ module core
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
                set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
                
-               set_epc(next_cpu_mode, instr.pc);                  
+               set_epc(next_cpu_mode_when_interrupted, instr.pc);                  
                set_cause(next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
-               set_tval(next_cpu_mode, 32'd0);
+               set_tval(next_cpu_mode_when_interrupted, 32'd0);
                set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
             end else if (instr.mret) begin
                // trap by instruction (sync)
@@ -1075,8 +1072,9 @@ module core
                set_mstatus_by_sret();               
             end else begin
                // trap by exception (sync)
-               cpu_mode 
-                 set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);
+               cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
+               set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);
+               
                set_epc(next_cpu_mode_when_exception, instr.pc);                  
                set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
                set_tval(next_cpu_mode_when_exception, exception_tval);
