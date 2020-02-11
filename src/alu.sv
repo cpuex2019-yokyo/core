@@ -16,7 +16,10 @@ module alu
    wire [63:0]       mul_temp_hsu = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({32'b0, register.rs2});
    wire [63:0]       mul_temp_hu = $signed({32'b0, register.rs1}) * $signed({32'b0, register.rs2});
 
-
+   wire [63:0] _extended_rs1 = {{32{register.rs1[31]}}, register.rs1};
+   wire [63:0] _tmp_srai = _extended_rs1 >> instr.imm[4:0];
+   wire [63:0] _tmp_sra = _extended_rs1 >> register.rs2[4:0];
+   
    wire [31:0]       _result =
                      instr.lui? instr.imm:
                      instr.auipc? $signed(instr.imm) + instr.pc:
@@ -48,16 +51,16 @@ module alu
                      instr.andi? register.rs1 & instr.imm:
                      instr.slli? register.rs1 << instr.imm[4:0]:
                      instr.srli? register.rs1 >> instr.imm[4:0]:
-                     instr.srai? $signed(register.rs1) << instr.imm[4:0]:
+                     instr.srai? _tmp_srai[31:0]:
                      // arith others
                      instr.add? $signed(register.rs1) + $signed(register.rs2):
                      instr.sub? $signed(register.rs1) - $signed(register.rs2):
-                     instr.sll? register.rs1 << register.rs2:
+                     instr.sll? register.rs1 << register.rs2[4:0]:
                      instr.slt? $signed(register.rs1) < $signed(register.rs2):
-                     instr.sltu? $signed(register.rs1) < $signed(register.rs2):
+                     instr.sltu? register.rs1 < register.rs2:
                      instr.i_xor? register.rs1 ^ register.rs2:
                      instr.srl? register.rs1 >> register.rs2[4:0]:
-                     instr.sra? $signed(register.rs1) >>> register.rs2[4:0]:
+                     instr.sra? _tmp_sra[31:0]:
                      instr.i_or? register.rs1 | register.rs2:
                      instr.i_and? register.rs1 & register.rs2:
                      instr.fence? 32'b0: // NOTE: fence is nop in this implementation
