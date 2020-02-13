@@ -188,9 +188,18 @@ module mmu(
    end
 
    // main logic
-   ///////////////////
-   wire [33:0] l1_result = {ppn1(pte), vpn0(_vaddr), voffset(_vaddr)};
-   wire [33:0] l0_result = {ppn1(pte), ppn0(pte), voffset(_vaddr)};
+   ///////////////////   
+   function l1_result(input [31:0] pte, input [31:0] vaddr);
+   begin
+    l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
+   end  
+   endfunction
+   
+   function l0_result(input [31:0] pte, input [31:0] vaddr);
+   begin
+    l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
+   end  
+   endfunction   
    
    task handle_leaf(input level, input [31:0] pte);
       begin
@@ -207,9 +216,9 @@ module mmu(
                req_wdata <= _wdata;
                req_wstrb <= _wstrb;
                // NOTE: 34 -> 32
-               req_addr <= level == 1? l1_result[31:0] : l0_result[31:0];
+               req_addr <= level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
                // NOTE: 34 -> 22
-               set_tlb(_vaddr[31:12], level == 1? l1_result[33:12] : l0_result[33:12]);
+               set_tlb(_vaddr, level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
                request_enable <= 1'b1;                  
             end
          end
@@ -256,7 +265,7 @@ module mmu(
       end
    endtask
 
-   task set_tlb(input [19:0] vpn, input [21:0] ppn);
+   task set_tlb(input [31:0] vaddr, input [34:0] paddr);
       begin
          if(!tlb_valid(tlb_table[0])) begin
             tlb_table[0] <= {1'b1, vpn, ppn};            
