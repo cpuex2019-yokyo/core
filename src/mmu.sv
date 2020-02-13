@@ -343,7 +343,7 @@ module mmu(
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
             operation_cause <= (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;            
-            if (paging_mode == 0) begin
+            if (paging_mode == 0 || cpu_mode == CPU_M) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
                req_mode <= _req_mode;
