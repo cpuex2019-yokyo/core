@@ -67,46 +67,46 @@ module mmu(
    // utils
    ///////////////////
    
-   function vpn1(input [31:0] addr);
+   function [9:0] vpn1(input [31:0] addr);
       begin
          vpn1 = addr[31:22];
       end
    endfunction
    
-   function vpn0(input [31:0] addr);
+   function [9:0] vpn0(input [31:0] addr);
       begin
          vpn0 = addr[21:12];
       end
    endfunction
    
-   function vpn(input [31:0] addr);
+   function [19:0] vpn(input [31:0] addr);
       begin
          vpn = addr[31:12];
       end
    endfunction
    
-   function voffset(input [31:0] addr);
+   function [11:0] voffset(input [31:0] addr);
       begin
          voffset = addr[11:0];
       end
    endfunction
 
    // return: 12 bit
-   function ppn1(input [31:0] addr);
+   function [11:0] ppn1(input [31:0] addr);
       begin
          ppn1 = addr[31:20];
       end
    endfunction
 
    // return: 10 bit
-   function ppn0(input [31:0] addr);
+   function [9:0] ppn0(input [31:0] addr);
       begin
          ppn0 = addr[19:10];
       end
    endfunction // ppn0
    
    // return: 22 bit
-   function ppn(input [31:0] addr);
+   function [21:0] ppn(input [31:0] addr);
       begin
          ppn = addr[31:10];
       end
@@ -186,74 +186,26 @@ module mmu(
    initial begin
       init();
    end
-
-   // main logic
-   ///////////////////   
-   function l1_result(input [31:0] pte, input [31:0] vaddr);
-   begin
-    l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
-   end  
-   endfunction
-   
-   function l0_result(input [31:0] pte, input [31:0] vaddr);
-   begin
-    l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
-   end  
-   endfunction   
-   
-   task handle_leaf(input level, input [31:0] pte);
-      begin
-         if (~has_permission(pte)) begin
-            raise_pagefault_exception();
-         end else if (level > 0 && ppn0(pte) != 10'b0) begin
-            raise_pagefault_exception();            
-         end else begin
-            if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && pte[7])) begin
-               raise_pagefault_exception();            
-            end else begin
-               state <= WAITING_RESPONSE;
-               req_mode <= _mode;
-               req_wdata <= _wdata;
-               req_wstrb <= _wstrb;
-               // NOTE: 34 -> 32
-               req_addr <= level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
-               // NOTE: 34 -> 22
-               set_tlb(_vaddr, level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
-               request_enable <= 1'b1;                  
-            end
-         end
-      end
-   endtask // handle_leaf
-   
-   wire _req_mode = (fetch_request_enable)? freq_mode:
-        (mem_request_enable)? mreq_mode:
-        1'b0;
-   wire [31:0] _req_addr = (fetch_request_enable)? freq_addr:
-               (mem_request_enable)? mreq_addr:
-               1'b0;
-   wire [31:0] _req_wdata = (fetch_request_enable)? freq_wdata:
-               (mem_request_enable)? mreq_wdata:
-               1'b0;
-   wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
-               (mem_request_enable)? mreq_wstrb:
-               1'b0;
    
    // TLB
-   function tlb_valid(input [31:0] tlb_entry);
+   ///////////////////      
+   reg [42:0]                tlb_table [0:15];
+   
+   function [0:0] tlb_valid(input [42:0] entry);
       begin
-         tlb_valid = tlb_entry[42];         
+         tlb_valid = entry[42];         
       end
    endfunction
    
-   function tlb_tag(input [31:0] tlb_entry);
+   function [19:0] tlb_tag(input [42:0] entry);
       begin
-         tlb_tag = tlb_entry[41:22];         
+         tlb_tag = entry[41:22];         
       end
    endfunction
    
-   function tlb_phys(input [31:0] tlb_entry);
+   function [21:0] tlb_phys(input [42:0] entry);
       begin
-         tlb_phys = tlb_entry[21:0];         
+         tlb_phys = entry[21:0];         
       end
    endfunction
 
@@ -268,7 +220,9 @@ module mmu(
 
    task set_tlb(input [31:0] vaddr, input [33:0] paddr);
       begin
-         if(!tlb_valid(tlb_table[0])) begin
+         if (tlb_valid(tlb_entry(vaddr))) begin
+            // if there's a valid entry for vaddr, do nothing.
+         end else if(!tlb_valid(tlb_table[0])) begin
             tlb_table[0] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[1])) begin
             tlb_table[1] <= {1'b1, vaddr[31:12], paddr[33:12]};            
@@ -307,27 +261,79 @@ module mmu(
       end
    endtask
    
-   reg [42:0]                tlb_table [0:15];
-   wire [42:0]               tlb_entry = 
-                             tlb_tag(tlb_table[0]) == vpn(_req_addr)? tlb_table[0]:
-                             tlb_tag(tlb_table[1]) == vpn(_req_addr)? tlb_table[1]:                             
-                             tlb_tag(tlb_table[2]) == vpn(_req_addr)? tlb_table[2]:                             
-                             tlb_tag(tlb_table[3]) == vpn(_req_addr)? tlb_table[3]:                             
-                             tlb_tag(tlb_table[4]) == vpn(_req_addr)? tlb_table[4]:                             
-                             tlb_tag(tlb_table[5]) == vpn(_req_addr)? tlb_table[5]:                             
-                             tlb_tag(tlb_table[6]) == vpn(_req_addr)? tlb_table[6]:                             
-                             tlb_tag(tlb_table[7]) == vpn(_req_addr)? tlb_table[7]:                             
-                             tlb_tag(tlb_table[8]) == vpn(_req_addr)? tlb_table[8]:                             
-                             tlb_tag(tlb_table[9]) == vpn(_req_addr)? tlb_table[9]:                             
-                             tlb_tag(tlb_table[10]) == vpn(_req_addr)? tlb_table[10]:                             
-                             tlb_tag(tlb_table[11]) == vpn(_req_addr)? tlb_table[11]:                             
-                             tlb_tag(tlb_table[12]) == vpn(_req_addr)? tlb_table[12]:                             
-                             tlb_tag(tlb_table[13]) == vpn(_req_addr)? tlb_table[13]:                             
-                             tlb_tag(tlb_table[14]) == vpn(_req_addr)? tlb_table[14]:                             
-                             tlb_tag(tlb_table[15]) == vpn(_req_addr)? tlb_table[15]:
+   function [42:0] tlb_entry(input [31:0] vaddr);
+   begin 
+    tlb_entry = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_table[0]:
+                             tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_table[1]:                             
+                             tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_table[2]:                             
+                             tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_table[3]:                             
+                             tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_table[4]:                             
+                             tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_table[5]:                             
+                             tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_table[6]:                             
+                             tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_table[7]:                             
+                             tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_table[8]:                             
+                             tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_table[9]:                             
+                             tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_table[10]:                             
+                             tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_table[11]:                             
+                             tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_table[12]:                             
+                             tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_table[13]:                             
+                             tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_table[14]:                             
+                             tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_table[15]:
                              43'b0;
+   end
+   endfunction
+
+   // main logic
+   ///////////////////   
+   function [33:0] l1_result(input [31:0] pte, input [31:0] vaddr);
+   begin
+    l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
+   end  
+   endfunction
    
+   function [33:0] l0_result(input [31:0] pte, input [31:0] vaddr);
+   begin
+    l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
+   end  
+   endfunction   
    
+   task handle_leaf(input level, input [31:0] pte);
+      begin
+         if (!has_permission(pte)) begin
+            raise_pagefault_exception();
+         end else if (level > 0 && ppn0(pte) != 10'b0) begin
+            raise_pagefault_exception();            
+         end else begin
+            if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
+               raise_pagefault_exception();            
+            end else begin
+               state <= WAITING_RESPONSE;
+               req_mode <= _mode;
+               req_wdata <= _wdata;
+               req_wstrb <= _wstrb;
+               // NOTE: 34 -> 32
+               req_addr <= level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
+               // NOTE: 34 -> 22
+               set_tlb(_vaddr, level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+               request_enable <= 1'b1;                  
+            end
+         end
+      end
+   endtask // handle_leaf
+   
+   wire _req_mode = (fetch_request_enable)? freq_mode:
+        (mem_request_enable)? mreq_mode:
+        1'b0;
+   wire [31:0] _req_addr = (fetch_request_enable)? freq_addr:
+               (mem_request_enable)? mreq_addr:
+               1'b0;
+   wire [31:0] _req_wdata = (fetch_request_enable)? freq_wdata:
+               (mem_request_enable)? mreq_wdata:
+               1'b0;
+   wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
+               (mem_request_enable)? mreq_wstrb:
+               1'b0;       
+                  
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
    always @(posedge clk) begin
       if(rstn) begin
@@ -343,15 +349,17 @@ module mmu(
                req_mode <= _req_mode;
                req_wdata <= _req_wdata;
                req_wstrb <= _req_wstrb;
-               req_addr <= _req_addr;               
+               req_addr <= _req_addr;
+               // TODO: kore ha dame
+               set_tlb(_req_addr, {2'b0, _req_addr});                         
             end else begin
-               if (tlb_valid(tlb_entry)) begin
+               if (tlb_valid(tlb_entry(_req_addr))) begin
                   state <= WAITING_RESPONSE;
                   request_enable <= 1'b1;
                   req_mode <= _req_mode;
                   req_wdata <= _req_wdata;
                   req_wstrb <= _req_wstrb;
-                  req_addr <= {tlb_phys(tlb_entry), _req_addr[11:0]};
+                  req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
                end else begin
                   state <= FETCHING_FIRST_PTE;
                   request_enable <= 1'b1;

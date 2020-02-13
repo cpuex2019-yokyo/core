@@ -35,7 +35,7 @@ module core
    output wire [1:0]  o_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
-   output wire        flush_tlb,
+   output reg        flush_tlb,
 
    // from MMU
    input wire [4:0]   mem_exception_vec,
