@@ -337,13 +337,15 @@ module mmu(
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
    always @(posedge clk) begin
       if(rstn) begin
-         if (state == WAITING_REQUEST && flush_tlb) begin
-            clear_tlb();            
-         end else if (state == WAITING_REQUEST && (fetch_request_enable | mem_request_enable)) begin
+         if (state == WAITING_REQUEST && (fetch_request_enable | mem_request_enable)) begin
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
             operation_cause <= (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;            
-            if (paging_mode == 0 || cpu_mode == CPU_M) begin
+            if (flush_tlb) begin
+               clear_tlb();
+                state <= WAITING_RECEIVE;            
+                mem_response_enable <= 1'b1;               
+            end else if (paging_mode == 0 || cpu_mode == CPU_M) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
                req_mode <= _req_mode;
@@ -381,7 +383,7 @@ module mmu(
                   state <= FETCHING_SECOND_PTE;                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
-                  req_addr <= {satp_ppn[19:0], 12'b0} + vpn0(_vaddr) * 4;
+                  req_addr <= {resp_data[29:10], 12'b0} + vpn0(_vaddr) * 4;
                end
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin

@@ -35,7 +35,7 @@ module core
    output wire [1:0]  o_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
-   output reg        flush_tlb,
+   output wire        flush_tlb,
 
    // from MMU
    input wire [4:0]   mem_exception_vec,
@@ -64,7 +64,14 @@ module core
                                                   TRAP
                                                   } state;
    const cpu_mode_t cpu_mode_base = CPU_U;
-
+   
+   task init_stage_states;
+   begin
+               instr <= '{default: '0};
+            register <= '{default: '0};
+   end
+   endtask
+   
    // registers
    /////////
    (* mark_debug = "true" *) wire [4:0]         reg_w_dest;
@@ -510,8 +517,7 @@ module core
 
    // stage outputs
    (* mark_debug = "true" *) wire [31:0]        exec_result;
-   (* mark_debug = "true" *) wire               is_jump_chosen_e_out;
-   (* mark_debug = "true" *) reg               is_jump_chosen;  
+   (* mark_debug = "true" *) wire               is_jump_chosen;
    (* mark_debug = "true" *) wire [31:0]        jump_dest;
 
    execute _execute(.clk(clk),
@@ -524,7 +530,7 @@ module core
                     .register(register),
 
                     .result(exec_result),
-                    .is_jump_chosen(is_jump_chosen_e_out),
+                    .is_jump_chosen(is_jump_chosen),
                     .jump_dest(jump_dest));
 
    // mem stage
@@ -563,7 +569,8 @@ module core
             .is_a_read(is_a_read),
             .is_a_write(is_a_write),
 
-            .result(mem_result));
+            .result(mem_result),
+            .flush_tlb(flush_tlb));
 
    // write stage
    /////////
@@ -604,6 +611,9 @@ module core
          state <= INIT;         
          cpu_mode <= CPU_M;
          is_csr_valid <= 1'b0;
+         
+         exception_number <= 5'b0;
+         exception_tval <= 32'b0;
 
          // init csr
          _stvec <= 32'b0;
@@ -893,8 +903,12 @@ module core
             state <= FETCH;
             fetch_enabled <= 1;
          end else if (state == FETCH && is_fetch_done) begin
-            if (instr_raw == 32'b0) begin // TODO
-               raise_illegal_instruction(instr_raw); // TODO
+            if (mem_exception_enable) begin
+               state <= TRAP;               
+               exception_number <= mem_exception_vec;
+               exception_tval <= mem_exception_tval; 
+            end else if (instr_raw == 32'b0) begin // TODO: cover more exception
+               raise_illegal_instruction(instr_raw);
                state <= TRAP;
             end else begin
                state <= DECODE;
@@ -902,10 +916,12 @@ module core
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
             register <= register_d_out;
-            
+            // reset previous results ... d -> e
+            exec_enabled <= 1;    
+                     
             if (instr_d_out.csrop) begin
                state <= EXEC_PRIV;           
-               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                            
+               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                         
             end else if (instr_d_out.rv32a) begin               
                state <= EXEC_ATOM1;
                // NOTE:
@@ -919,9 +935,6 @@ module core
                mem_arg <= register_d_out.rs1; // load addr: rs1
             end else begin
                state <= EXEC;
-
-               // start to execute ... d -> e
-               exec_enabled <= 1;
             end
          end else if (state == EXEC_ATOM1 && is_mem_done) begin   
             exec_enabled <= 0;         
@@ -970,10 +983,9 @@ module core
             end
          end else if (state == EXEC && is_exec_done) begin
             exec_enabled <= 0;
-            is_jump_chosen <= is_jump_chosen_e_out;
             // TODO(future): implement wfi correctly.
             // Although the spec says regarding wfi as nop is legal...
-            if (is_jump_chosen_e_out && jump_dest[1:0] != 2'b0) begin
+            if (is_jump_chosen && jump_dest[1:0] != 2'b0) begin
                 state <= TRAP;
                 raise_instruction_address_misaligned(jump_dest);
             end else if (instr.fence || instr.fencei || instr.wfi) begin
@@ -1003,12 +1015,10 @@ module core
                state <= MEM;
                // start to operate mem ... e -> m
                mem_enabled <= 1;
-               mem_arg <= exec_result;
-               flush_tlb <= instr.sfence_vma;               
+               mem_arg <= exec_result;   
             end                        
          end else if (state == MEM && is_mem_done) begin
-            mem_enabled <= 0;
-
+            mem_enabled <= 0;    
             if (mem_exception_enable) begin
                state <= TRAP;               
                exception_number <= mem_exception_vec;
@@ -1019,28 +1029,27 @@ module core
                write_enabled <= 1;
                data_to_write <= mem_result;
             end
-         end else if (state == WRITE) begin
-            if(is_write_done) begin
+         end else if (state == WRITE && is_write_done) begin
                write_enabled <= 0;
                if (is_interrupted) begin
                   state <= TRAP;            
                end else begin
+                  init_stage_states();
                   if (is_jump_chosen) begin
                         fetch_enabled <= 1;
                         state <= FETCH;
                         pc <= jump_dest;
-                        is_jump_chosen <= 1'b0;
                   end else begin
                      fetch_enabled <= 1;
                      state <= FETCH;
                      pc <= pc + 4;
                   end
-               end
-            end               
+               end              
          end else if (state == TRAP) begin
             fetch_enabled <= 1;
             state <= FETCH;
-
+            init_stage_states();
+            
             if (is_interrupted) begin
                // trap by interrupts (async)
                // when a trap is taken from y to x, 
@@ -1077,7 +1086,7 @@ module core
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
                set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);
                
-               set_epc(next_cpu_mode_when_exception, instr.pc);                  
+               set_epc(next_cpu_mode_when_exception, pc);                  
                set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
                set_tval(next_cpu_mode_when_exception, exception_tval);
                set_mstatus_by_trap(next_cpu_mode_when_exception);               

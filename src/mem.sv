@@ -26,7 +26,8 @@ module mem(
            input wire        is_a_write,
 
            // output
-           output reg [31:0] result);
+           output reg [31:0] result,
+           output reg [31:0] flush_tlb);
 
 
    localparam WAITING_REQUEST = 0;
@@ -54,7 +55,15 @@ module mem(
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && enabled) begin
-            if (instr.is_load || is_a_read) begin
+            if (instr.sfence_vma) begin
+               completed <= 0;
+               flush_tlb <= 1;
+               state <= WAITING_DONE;
+               // dummy
+               mode <= MEMREQ_READ;
+               addr <= 32'b0;
+               request_enable <= 1;
+            end else if (instr.is_load || is_a_read) begin
                completed <= 0;
 
                state <= WAITING_DONE;
@@ -113,8 +122,9 @@ module mem(
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;
             state <= WAITING_REQUEST;
-
-            if (instr.lb) begin
+            if (instr.sfence_vma) begin
+                flush_tlb <= 1'b0;
+            end if (instr.lb) begin
                case(_addr[1:0])
                  2'b11: result <= {{24{data[31]}}, data[31:24]};
                  2'b10: result <= {{24{data[23]}}, data[23:16]};
