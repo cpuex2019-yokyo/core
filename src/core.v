@@ -34,6 +34,7 @@ module core_wrapper
    output wire [1:0]  o_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
+   output wire        flush_tlb,
 
    // from MMU
    input wire [4:0]   mem_exception_vec,
@@ -69,6 +70,7 @@ module core_wrapper
               .o_cpu_mode(o_cpu_mode),
               .o_mxr(o_mxr),
               .o_sum(o_sum),
+              .flush_tlb(flush_tlb),
 
               .mem_exception_vec(mem_exception_vec),              
               .mem_exception_enable(mem_exception_enable),

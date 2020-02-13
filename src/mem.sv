@@ -106,6 +106,7 @@ module mem(
                end
                request_enable <= 1;               
             end else begin
+               // including sfence.vma
                result <= arg;
                completed <= 1;
             end

@@ -25,9 +25,9 @@ module mmu_wrapper (
                     output wire        mem_response_enable,
                     output wire [31:0] mresp_data,
 
-                    output wire [4:0]   exception_vec,
-                    output wire [31:0]  exception_tval,
-                    output wire         exception_enable,
+                    output wire [4:0]  exception_vec,
+                    output wire [31:0] exception_tval,
+                    output wire        exception_enable,
 
                     output wire        request_enable,
                     output wire        req_mode,
@@ -35,7 +35,9 @@ module mmu_wrapper (
                     output wire [31:0] req_wdata,
                     output wire [3:0]  req_wstrb,
                     input wire         response_enable,
-                    input wire [31:0]  resp_data
+                    input wire [31:0]  resp_data,
+                    
+                    input wire         flush_tlb
                     );
 
    
@@ -72,7 +74,9 @@ module mmu_wrapper (
             .req_wdata(req_wdata),
             .req_wstrb(req_wstrb),
             .response_enable(response_enable),
-            .resp_data(resp_data));   
+            .resp_data(resp_data),
+
+            .flush_tlb(flush_tlb));   
 
 
 endmodule

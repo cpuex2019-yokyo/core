@@ -35,6 +35,7 @@ module core
    output wire [1:0]  o_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
+   output wire        flush_tlb,
 
    // from MMU
    input wire [4:0]   mem_exception_vec,
@@ -1003,6 +1004,7 @@ module core
                // start to operate mem ... e -> m
                mem_enabled <= 1;
                mem_arg <= exec_result;
+               flush_tlb <= instr.sfence_vma;               
             end                        
          end else if (state == MEM && is_mem_done) begin
             mem_enabled <= 0;
