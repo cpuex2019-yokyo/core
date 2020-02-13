@@ -350,8 +350,6 @@ module mmu(
                req_wdata <= _req_wdata;
                req_wstrb <= _req_wstrb;
                req_addr <= _req_addr;
-               // TODO: kore ha dame
-               set_tlb(_req_addr, {2'b0, _req_addr});                         
             end else begin
                if (tlb_valid(tlb_entry(_req_addr))) begin
                   state <= WAITING_RESPONSE;
