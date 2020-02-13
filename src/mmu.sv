@@ -36,11 +36,12 @@ module mmu(
            output reg [31:0] req_wdata,
            output reg [3:0]  req_wstrb,
            input wire        response_enable,
-           input wire [31:0] resp_data
-           );
-   
+           input wire [31:0] resp_data,
 
+           input wire        sfence_vma
+           );  
 
+   // mmu state
    typedef enum reg [3:0]    {
                               WAITING_REQUEST,
                               FETCHING_FIRST_PTE, 
@@ -75,6 +76,12 @@ module mmu(
    function vpn0(input [31:0] addr);
       begin
          vpn0 = addr[21:12];
+      end
+   endfunction
+   
+   function vpn(input [31:0] addr);
+      begin
+         vpn = addr[31:12];
       end
    endfunction
    
@@ -207,54 +214,91 @@ module mmu(
       end
    endtask // handle_leaf
    
+   wire _req_mode = (fetch_request_enable)? freq_mode:
+        (mem_request_enable)? mreq_mode:
+        1'b0;
+   wire [31:0] _req_addr = (fetch_request_enable)? freq_addr:
+               (mem_request_enable)? mreq_addr:
+               1'b0;
+   wire [31:0] _req_wdata = (fetch_request_enable)? freq_wdata:
+               (mem_request_enable)? mreq_wdata:
+               1'b0;
+   wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
+              (mem_request_enable)? mreq_wstrb:
+              1'b0;
+      
+   // TLB
+   function tlb_valid(wire [31:0] tlb_entry);
+      begin
+         tlb_valid = tlb_entry[42];         
+      end
+   endfunction
+   
+   function tlb_tag(wire [31:0] tlb_entry);
+      begin
+         tlb_tag = tlb_entry[41:22];         
+      end
+   endfunction
+   
+   function tlb_phys(wire [31:0] tlb_entry);
+      begin
+         tlb_phys = tlb_entry[21:0];         
+      end
+   endfunction
+
+   reg [42:0]                tlb_table [0:15];
+   wire [42:0]               tlb_entry = 
+                             tlb_tag(tlb_table[0]) == vpn(_req_addr)? tlb_table[0]:
+                             tlb_tag(tlb_table[1]) == vpn(_req_addr)? tlb_table[1]:                             
+                             tlb_tag(tlb_table[2]) == vpn(_req_addr)? tlb_table[2]:                             
+                             tlb_tag(tlb_table[3]) == vpn(_req_addr)? tlb_table[3]:                             
+                             tlb_tag(tlb_table[4]) == vpn(_req_addr)? tlb_table[4]:                             
+                             tlb_tag(tlb_table[5]) == vpn(_req_addr)? tlb_table[5]:                             
+                             tlb_tag(tlb_table[6]) == vpn(_req_addr)? tlb_table[6]:                             
+                             tlb_tag(tlb_table[7]) == vpn(_req_addr)? tlb_table[7]:                             
+                             tlb_tag(tlb_table[8]) == vpn(_req_addr)? tlb_table[8]:                             
+                             tlb_tag(tlb_table[9]) == vpn(_req_addr)? tlb_table[9]:                             
+                             tlb_tag(tlb_table[10]) == vpn(_req_addr)? tlb_table[10]:                             
+                             tlb_tag(tlb_table[11]) == vpn(_req_addr)? tlb_table[11]:                             
+                             tlb_tag(tlb_table[12]) == vpn(_req_addr)? tlb_table[12]:                             
+                             tlb_tag(tlb_table[13]) == vpn(_req_addr)? tlb_table[13]:                             
+                             tlb_tag(tlb_table[14]) == vpn(_req_addr)? tlb_table[14]:                             
+                             tlb_tag(tlb_table[15]) == vpn(_req_addr)? tlb_table[15]:
+                             43'b0;
+                  
+        
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32 
    always @(posedge clk) begin
       if(rstn) begin
-         if (state == WAITING_REQUEST && fetch_request_enable) begin
+         if (state == WAITING_REQUEST && (fetch_request_enable | mem_request_enable)) begin
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
-            operation_cause <= CAUSE_FETCH;            
+            operation_cause <= (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;            
             if (paging_mode == 0) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
-               req_mode <= freq_mode;
-               req_wdata <= freq_wdata;
-               req_wstrb <= freq_wstrb;
-               req_addr <= freq_addr;               
+               req_mode <= _req_mode;
+               req_wdata <= _req_wdata;
+               req_wstrb <= _req_wstrb;
+               req_addr <= _req_addr;               
             end else begin
-               // TODO: TLB hit
-               state <= FETCHING_FIRST_PTE;
-               request_enable <= 1'b1;
-               req_mode <= MEMREQ_READ;
-               req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
-               ;            
-               _vaddr <= freq_addr;
-               _mode <= freq_mode;
-               _wdata <= freq_wdata;
-               _wstrb <= freq_wstrb;
-            end
-         end else if (state == WAITING_REQUEST & mem_request_enable) begin
-            exception_vec <= 5'b0;
-            exception_enable <= 1'b0;
-            operation_cause <= CAUSE_MEM;            
-            if (paging_mode == 0) begin
-               state <= WAITING_RESPONSE;
-               request_enable <= 1'b1;
-               req_mode <= mreq_mode;
-               req_wdata <= mreq_wdata;
-               req_wstrb <= mreq_wstrb;
-               req_addr <= mreq_addr;               
-            end else begin
-               // TODO: TLB hit
-               state <= FETCHING_FIRST_PTE;            
-               request_enable <= 1'b1;
-               req_mode <= MEMREQ_READ;
-               req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(freq_addr) * 4;            
-               
-               _vaddr <= mreq_addr;
-               _mode <= mreq_mode;
-               _wdata <= mreq_wdata;
-               _wstrb <= mreq_wstrb;
+               if (tlb_valid(tlb_entry)) begin
+                  state <= WAITING_RESPONSE;
+                  request_enable <= 1'b1;
+                  req_mode <= _req_mode;
+                  req_wdata <= _req_wdata;
+                  req_wstrb <= _req_wstrb;
+                  req_addr <= {tlb_phys(tlb_entry), _req_addr[11:0]};
+               end else begin
+                  state <= FETCHING_FIRST_PTE;
+                  request_enable <= 1'b1;
+                  req_mode <= MEMREQ_READ;
+                  req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(_req_addr) * 4;            
+                  _vaddr <= _req_addr;
+                  _mode <= _req_mode;
+                  _wdata <= _req_wdata;
+                  _wstrb <= _req_wstrb;
+               end
             end
          end else if (state == FETCHING_FIRST_PTE && response_enable) begin
             if (resp_data[0] == 0 || (resp_data[1] == 0 && resp_data[2] == 1)) begin
