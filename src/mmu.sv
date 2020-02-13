@@ -239,24 +239,25 @@ module mmu(
                1'b0;
    
    // TLB
-   function tlb_valid(wire [31:0] tlb_entry);
+   function tlb_valid(input [31:0] tlb_entry);
       begin
          tlb_valid = tlb_entry[42];         
       end
    endfunction
    
-   function tlb_tag(wire [31:0] tlb_entry);
+   function tlb_tag(input [31:0] tlb_entry);
       begin
          tlb_tag = tlb_entry[41:22];         
       end
    endfunction
    
-   function tlb_phys(wire [31:0] tlb_entry);
+   function tlb_phys(input [31:0] tlb_entry);
       begin
          tlb_phys = tlb_entry[21:0];         
       end
    endfunction
 
+   integer i;   
    task clear_tlb;
       begin
          for (i = 0; i < 16; i = i + 1) begin
@@ -265,43 +266,43 @@ module mmu(
       end
    endtask
 
-   task set_tlb(input [31:0] vaddr, input [34:0] paddr);
+   task set_tlb(input [31:0] vaddr, input [33:0] paddr);
       begin
          if(!tlb_valid(tlb_table[0])) begin
-            tlb_table[0] <= {1'b1, vpn, ppn};            
+            tlb_table[0] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[1])) begin
-            tlb_table[1] <= {1'b1, vpn, ppn};            
+            tlb_table[1] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[2])) begin
-            tlb_table[2] <= {1'b1, vpn, ppn};            
+            tlb_table[2] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[3])) begin
-            tlb_table[3] <= {1'b1, vpn, ppn};            
+            tlb_table[3] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[4])) begin
-            tlb_table[4] <= {1'b1, vpn, ppn};            
+            tlb_table[4] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[5])) begin
-            tlb_table[5] <= {1'b1, vpn, ppn};            
+            tlb_table[5] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[6])) begin
-            tlb_table[6] <= {1'b1, vpn, ppn};            
+            tlb_table[6] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[7])) begin
-            tlb_table[7] <= {1'b1, vpn, ppn};            
+            tlb_table[7] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[8])) begin
-            tlb_table[8] <= {1'b1, vpn, ppn};            
+            tlb_table[8] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[9])) begin
-            tlb_table[9] <= {1'b1, vpn, ppn};            
+            tlb_table[9] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[10])) begin
-            tlb_table[10] <= {1'b1, vpn, ppn};            
+            tlb_table[10] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[11])) begin
-            tlb_table[11] <= {1'b1, vpn, ppn};            
+            tlb_table[11] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[12])) begin
-            tlb_table[12] <= {1'b1, vpn, ppn};            
+            tlb_table[12] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[13])) begin
-            tlb_table[13] <= {1'b1, vpn, ppn};            
+            tlb_table[13] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[14])) begin
-            tlb_table[14] <= {1'b1, vpn, ppn};            
+            tlb_table[14] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[15])) begin
-            tlb_table[15] <= {1'b1, vpn, ppn};            
+            tlb_table[15] <= {1'b1, vaddr[31:12], paddr[33:12]};            
          end else begin
             // TODO: should be replaced with a better algorithm!
-            tlb_table[0] <= {1'b1, vpn, ppn};
+            tlb_table[0] <= {1'b1, vaddr[31:12], paddr[33:12]};
          end
       end
    endtask
@@ -328,14 +329,10 @@ module mmu(
    
    
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
-   integer                   i;   
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && flush_tlb) begin
-            // clear TLB
-            for (i = 0; i < 16; i = i + 1) begin
-               tlb_table[i][42] <= 1'b0;               
-            end
+            clear_tlb();            
          end else if (state == WAITING_REQUEST && (fetch_request_enable | mem_request_enable)) begin
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
