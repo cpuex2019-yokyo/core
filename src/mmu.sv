@@ -112,7 +112,7 @@ module mmu(
       end
    endfunction // ppn0
 
-   (* mark_debug = "true" *) reg [31:0] exception intl_cause;   
+   (* mark_debug = "true" *) reg [31:0] exception_intl_cause;   
    task raise_pagefault_exception(input [4:0] intl_cause, input [26:0] debug_info);
       begin
          exception_enable <= 1'b1;         
@@ -182,8 +182,8 @@ module mmu(
          
          exception_vec <= 5'b0;
          exception_tval <= 32'b0;
-         expcetion_enable <= 1'b0;         
-         exception_intl_cause <= 5'd0;
+         exception_enable <= 1'b0;         
+         exception_intl_cause <= 32'd0;
          
          state <= WAITING_REQUEST;
          clear_tlb();         
@@ -319,9 +319,9 @@ module mmu(
                req_wdata <= _wdata;
                req_wstrb <= _wstrb;
                // NOTE: 34 -> 32
-               req_addr <= level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
+               req_addr <= level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
                // NOTE: 34 -> 22
-               set_tlb(_vaddr, level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+               set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
                request_enable <= 1'b1;                  
             end
          end
