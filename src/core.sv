@@ -66,10 +66,10 @@ module core
    const cpu_mode_t cpu_mode_base = CPU_U;
    
    task init_stage_states;
-   begin
-               instr <= '{default: '0};
-            register <= '{default: '0};
-   end
+      begin
+         instr <= '{default: '0};
+         register <= '{default: '0};
+      end
    endtask
    
    // registers
@@ -254,7 +254,7 @@ module core
    endtask
 
    // TODO(linux): implmenent PMP appropriately   
-   (* mark_debug = "true" *) reg [8 * 16 - 1:0]       _pmpcfg;
+   reg [8 * 16 - 1:0]       _pmpcfg;
    // function [31:0] read_pmpcfg (input [31:0] value, input [3:0] idx);
    //    begin
    //       if(value & 1 == 0) begin
@@ -272,7 +272,7 @@ module core
       end
    endtask 
    
-   (* mark_debug = "true" *) reg [31:0]       _pmpaddr[0:15];
+   reg [31:0]       _pmpaddr[0:15];
    task write_pmpaddr (input [31:0] value, input [3:0] idx);
       begin
          _pmpaddr[idx] = value;         
@@ -291,7 +291,7 @@ module core
    // TODO(future): implement user-level trap   
    // reg [31:0]       _sedeleg;
    //reg [31:0]       _sideleg;
-   (* mark_debug = "true" *) reg [31:0]       _sie = _mie & _mideleg;
+   (* mark_debug = "true" *) wire [31:0]       _sie = _mie & _mideleg;
    task write_sie (input [31:0] value);
       begin
          write_mie((_mie & ~(_mideleg)) | (value & (_mideleg)));
@@ -417,11 +417,11 @@ module core
                        (_mip[7] && _mie[7])? (_mideleg[7]? 32'd4 : 32'd7):
                        (_mip[5] && _mie[5])? 32'd4:
                        32'd0;
-                       
+   
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
    (* mark_debug = "true" *) reg [31:0]          exception_tval;        
    wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;                 
-         
+   
    task raise_illegal_instruction(input [31:0] _tval);
       begin
          exception_number <= 5'd2;         
@@ -650,7 +650,8 @@ module core
          _pmpaddr[12] <= 32'b0;         
          _pmpaddr[13] <= 32'b0;         
          _pmpaddr[14] <= 32'b0;
-         _pmpaddr[15] <= 32'b0;         
+         _pmpaddr[15] <= 32'b0;
+         _mcycle_full <= 64'b0;         
       end
    endtask
 
@@ -898,11 +899,13 @@ module core
    end
    
    always @(posedge clk) begin
-      if(rstn) begin         
+      if(rstn) begin
          if (state == INIT) begin
             state <= FETCH;
             fetch_enabled <= 1;
          end else if (state == FETCH && is_fetch_done) begin
+            _mcycle_full <= _mcycle_full + 1;            
+            
             if (mem_exception_enable) begin
                state <= TRAP;               
                exception_number <= mem_exception_vec;
@@ -918,7 +921,7 @@ module core
             register <= register_d_out;
             // reset previous results ... d -> e
             exec_enabled <= 1;    
-                     
+            
             if (instr_d_out.csrop) begin
                state <= EXEC_PRIV;           
                {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                         
@@ -986,8 +989,8 @@ module core
             // TODO(future): implement wfi correctly.
             // Although the spec says regarding wfi as nop is legal...
             if (is_jump_chosen && jump_dest[1:0] != 2'b0) begin
-                state <= TRAP;
-                raise_instruction_address_misaligned(jump_dest);
+               state <= TRAP;
+               raise_instruction_address_misaligned(jump_dest);
             end else if (instr.fence || instr.fencei || instr.wfi) begin
                state <= WRITE;
                write_enabled <= 1;
@@ -1030,21 +1033,21 @@ module core
                data_to_write <= mem_result;
             end
          end else if (state == WRITE && is_write_done) begin
-               write_enabled <= 0;
-               if (is_interrupted) begin
-                  state <= TRAP;            
+            write_enabled <= 0;
+            if (is_interrupted) begin
+               state <= TRAP;            
+            end else begin
+               init_stage_states();
+               if (is_jump_chosen) begin
+                  fetch_enabled <= 1;
+                  state <= FETCH;
+                  pc <= jump_dest;
                end else begin
-                  init_stage_states();
-                  if (is_jump_chosen) begin
-                        fetch_enabled <= 1;
-                        state <= FETCH;
-                        pc <= jump_dest;
-                  end else begin
-                     fetch_enabled <= 1;
-                     state <= FETCH;
-                     pc <= pc + 4;
-                  end
-               end              
+                  fetch_enabled <= 1;
+                  state <= FETCH;
+                  pc <= pc + 4;
+               end
+            end              
          end else if (state == TRAP) begin
             fetch_enabled <= 1;
             state <= FETCH;

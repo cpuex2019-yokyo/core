@@ -112,12 +112,14 @@ module mmu(
       end
    endfunction // ppn0
 
-   task raise_pagefault_exception;
+   (* mark_debug = "true" *) reg [31:0] exception intl_cause;   
+   task raise_pagefault_exception(input [4:0] intl_cause, input [26:0] debug_info);
       begin
          exception_enable <= 1'b1;         
          exception_vec <= _mode == MEMREQ_READ? 5'd13: // load page fault
                           5'd15; // store/amo page fault
-         exception_tval <= _vaddr;         
+         exception_tval <= _vaddr;
+         exception_intl_cause <= {debug_info, intl_cause};         
          state <= WAITING_RECEIVE;
          if (operation_cause == CAUSE_FETCH) begin
             fetch_response_enable <= 1'b1;               
@@ -176,7 +178,12 @@ module mmu(
          _mode <= 1'b0;
          _wdata <= 32'b0;
          _wstrb <= 32'b0;
-         _vaddr <= 32'b0;     
+         _vaddr <= 32'b0;
+         
+         exception_vec <= 5'b0;
+         exception_tval <= 32'b0;
+         expcetion_enable <= 1'b0;         
+         exception_intl_cause <= 5'd0;
          
          state <= WAITING_REQUEST;
          clear_tlb();         
@@ -189,7 +196,7 @@ module mmu(
    
    // TLB
    ///////////////////      
-   (* mark_debug = "true" *) reg [42:0]                tlb_table [0:15];
+   reg [42:0]                tlb_table [0:15];
    
    function [0:0] tlb_valid(input [42:0] entry);
       begin
@@ -300,21 +307,21 @@ module mmu(
    task handle_leaf(input level, input [31:0] pte);
       begin
          if (!has_permission(pte)) begin
-            raise_pagefault_exception();
+            raise_pagefault_exception(5'd1, 27'd0);
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
-            raise_pagefault_exception();            
+            raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
          end else begin
             if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
-               raise_pagefault_exception();            
+               raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});            
             end else begin
                state <= WAITING_RESPONSE;
                req_mode <= _mode;
                req_wdata <= _wdata;
                req_wstrb <= _wstrb;
                // NOTE: 34 -> 32
-               req_addr <= level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
+               req_addr <= level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
                // NOTE: 34 -> 22
-               set_tlb(_vaddr, level == 1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+               set_tlb(_vaddr, level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
                request_enable <= 1'b1;                  
             end
          end
@@ -373,7 +380,7 @@ module mmu(
             end
          end else if (state == FETCHING_FIRST_PTE && response_enable) begin
             if (resp_data[0] == 0 || (resp_data[1] == 0 && resp_data[2] == 1)) begin
-               raise_pagefault_exception();               
+               raise_pagefault_exception(5'd4, {resp_data[0], resp_data[1], resp_data[2], 24'b0});               
             end else begin
                if (resp_data[1] == 1 || resp_data[3] == 1) begin
                   // PTE seems to be a leaf node.
@@ -388,13 +395,13 @@ module mmu(
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin
             if (resp_data[0] == 0 || (resp_data[1] == 0 && resp_data[2] == 1)) begin
-               raise_pagefault_exception();               
+               raise_pagefault_exception(5'd5, {resp_data[0], resp_data[1], resp_data[2], 24'b0});               
             end else begin
                if (resp_data[1] == 1 || resp_data[3] == 1) begin
                   // PTE seems to be a leaf node.
                   handle_leaf(0, resp_data);                  
                end else begin
-                  raise_pagefault_exception();               
+                  raise_pagefault_exception(5'd6, {resp_data[1], resp_data[3], 25'b0});               
                end
             end
          end else if (state == WAITING_RESPONSE && response_enable) begin

@@ -59,33 +59,33 @@ module virtio(
    wire [31:0]                  device_id = 32'h02;
    wire [31:0]                  vendor_id = 32'h554d4551;
    wire [31:0]                  host_features = 32'h00;
-   reg [31:0]                   host_features_sel;
-   reg [31:0]                   guest_features;
-   reg [31:0]                   guest_features_sel;
-   reg [31:0]                   guest_page_size;
-   reg [31:0]                   queue_sel;
+   (* mark_debug = "true" *) reg [31:0]                   host_features_sel;
+   (* mark_debug = "true" *) reg [31:0]                   guest_features;
+   (* mark_debug = "true" *)reg [31:0]                   guest_features_sel;
+   (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
+   (* mark_debug = "true" *) reg [31:0]                   queue_sel;
    wire [31:0]                  queue_num_max;
-   reg [31:0]                   queue_num;
-   reg [31:0]                   queue_align;
-   reg [31:0]                   queue_pfn;
+   (* mark_debug = "true" *) reg [31:0]                   queue_num;
+   (* mark_debug = "true" *) reg [31:0]                   queue_align;
+   (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
 
    // TODO: although xv6 uses legacy interface and the interface does not include QueueReady register in the MMIO model, xv6 has a macro for QueueReady.
    // It is not used in xv6, but I do not know whether it is in Linux.
    // So I have to inspect Linux src further more...
-   reg [31:0]                   queue_ready;
+   (* mark_debug = "true" *) reg [31:0]                   queue_ready;
    
-   reg [31:0]                   queue_notify;
+   (* mark_debug = "true" *) reg [31:0]                   queue_notify;
    wire [31:0]                  interrupt_status;
-   reg [31:0]                   interrupt_ack;
+   (* mark_debug = "true" *) reg [31:0]                   interrupt_ack;
    // NOTE: This register does not follow the naming convention of virtio spec.
    // This is because "state" is too ambigious ...  there are a lot of states!
-   reg [31:0]                   device_status;
+   (* mark_debug = "true" *) reg [31:0]                   device_status;
 
-   enum reg [3:0]               {
-                                 WAITING_QUERY, 
-                                 WAITING_RREADY, 
-                                 WAITING_BREADY
-                                 } interface_state;
+   (* mark_debug = "true" *) enum reg [3:0]               {
+                                                           WAITING_QUERY, 
+                                                           WAITING_RREADY, 
+                                                           WAITING_BREADY
+                                                           } interface_state;
    
    typedef enum reg [5:0]       {
                                  // waiting state
@@ -107,10 +107,10 @@ module virtio(
                                  // final state
                                  RAISE_IRQ                                 
                                  } controller_state_t;
-   controller_state_t controller_state;
+   (* mark_debug = "true" *) controller_state_t controller_state;
    const controller_state_t cstate_base = WAITING_NOTIFICATION;
    
-   reg                          controller_notified;
+   (* mark_debug = "true" *) reg                          controller_notified;
    
    task init_interface;
       begin
@@ -161,9 +161,9 @@ module virtio(
       end
    endtask
 
-   reg [31:0] _addr;
-   reg [31:0] _data;   
-   reg [3:0]  _wstrb;   
+   (* mark_debug = "true" *) reg [31:0] _addr;
+   (* mark_debug = "true" *) reg [31:0] _data;   
+   (* mark_debug = "true" *) reg [3:0]  _wstrb;   
    
    // this module assumes that only CPU access to this controller.
    always @(posedge clk) begin
@@ -216,8 +216,8 @@ module virtio(
    end
 
 
-   reg [15:0] avail_idx;
-   reg [15:0] used_idx;
+   (* mark_debug = "true" *) reg [15:0] avail_idx;
+   (* mark_debug = "true" *) reg [15:0] used_idx;
 
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
@@ -227,16 +227,16 @@ module virtio(
    // loaded data
    VRingDesc desc;   
    OutHDR outhdr;   
-   reg [15:0]  first_idx;   
-   reg [15:0]  second_idx;   
-   reg [15:0]  third_idx;   
-   reg [31:0]  buffer_addr;   
-   reg [31:0]  status_addr;
+   (* mark_debug = "true" *) reg [15:0]  first_idx;   
+   (* mark_debug = "true" *) reg [15:0]  second_idx;   
+   (* mark_debug = "true" *) reg [15:0]  third_idx;   
+   (* mark_debug = "true" *) reg [31:0]  buffer_addr;   
+   (* mark_debug = "true" *) reg [31:0]  status_addr;
    
    // on descriptor
    ///////////////////////
    
-   reg [3:0]   load_desc_microstate;
+   (* mark_debug = "true" *) reg [3:0]   load_desc_microstate;
    task load_desc(input [31:0] desc_idx, input [5:0] callback_state);
       begin
          if (load_desc_microstate == 0) begin
@@ -281,7 +281,7 @@ module virtio(
    // on outhdr
    ///////////////////////
    
-   reg [3:0]   load_outhdr_microstate;
+   (* mark_debug = "true" *) reg [3:0]   load_outhdr_microstate;
    task load_outhdr;            
       begin
          if (load_outhdr_microstate == 0) begin
@@ -325,15 +325,15 @@ module virtio(
    // disk control
    ///////////////////////
    
-   enum reg [3:0] {
-                   CDISK_INIT, 
-                   CDISK_R_DISK, 
-                   CDISK_R_MEM, 
-                   CDISK_W_DISK, 
-                   CDISK_W_MEM
-                   } cdisk_microstate;   
-   reg [6:0]      cdisk_loop_index;
-   reg [31:0]     cdisk_buf [0:127];
+   (* mark_debug = "true" *) enum reg [3:0] {
+                                             CDISK_INIT, 
+                                             CDISK_R_DISK, 
+                                             CDISK_R_MEM, 
+                                             CDISK_W_DISK, 
+                                             CDISK_W_MEM
+                                             } cdisk_microstate;   
+   (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
+   (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
 
    task load_disk(input startup);
       begin
@@ -474,12 +474,12 @@ module virtio(
    // notify
    ///////////////////////
    
-   enum reg [3:0] {
-                   NOTIFY_INIT, 
-                   NOTIFY_WAITING, 
-                   NOTIFY_WAITING2, 
-                   NOTIFY_WAITING3
-                   } notify_microstate;   
+   (* mark_debug = "true" *) enum reg [3:0] {
+                                             NOTIFY_INIT, 
+                                             NOTIFY_WAITING, 
+                                             NOTIFY_WAITING2, 
+                                             NOTIFY_WAITING3
+                                             } notify_microstate;   
    task write_used;
       begin
          if (notify_microstate == NOTIFY_INIT) begin

@@ -38,6 +38,7 @@ module fetch
          addr <= 0;
          wdata <= 0;
          wstrb <= 0;
+         instr_raw <= 32'b0;         
          request_enable <= 0;
       end
    endtask
