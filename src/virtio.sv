@@ -310,7 +310,7 @@ module virtio(
             end else begin
                mem_request_enable <= 0;            
             end
-         end else if (load_outhdr_microstate == 2) begin
+         end else if (load_outhdr_microstate == 3) begin
             if (mem_response_enable) begin
                load_outhdr_microstate <= 0;
                controller_state <= LOAD_SECOND_DESC;               

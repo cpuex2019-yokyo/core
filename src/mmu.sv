@@ -322,9 +322,9 @@ module mmu(
             req_wdata <= _wdata;
             req_wstrb <= _wstrb;
             // NOTE: 34 -> 32
-            req_addr <= level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
+            req_addr <= level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
             // NOTE: 34 -> 22
-            set_tlb(_vaddr, level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+            set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
             request_enable <= 1'b1;                  
          end
       end
