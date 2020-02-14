@@ -53,6 +53,7 @@ module virtio(
               output reg        virtio_interrupt
               );
 
+   // registers
    // TODO: set appropriate value for those registers.
    wire [31:0]                  magic_value = 32'h74726976;
    wire [31:0]                  version = 32'h01;
@@ -61,10 +62,10 @@ module virtio(
    wire [31:0]                  host_features = 32'h00;
    (* mark_debug = "true" *) reg [31:0]                   host_features_sel;
    (* mark_debug = "true" *) reg [31:0]                   guest_features;
-   (* mark_debug = "true" *)reg [31:0]                   guest_features_sel;
+   (* mark_debug = "true" *) reg [31:0]                   guest_features_sel;
    (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
    (* mark_debug = "true" *) reg [31:0]                   queue_sel;
-   wire [31:0]                  queue_num_max;
+   wire [31:0]                  queue_num_max = queue_sel == 32'b0? 32'd8 : 32'd0;
    (* mark_debug = "true" *) reg [31:0]                   queue_num;
    (* mark_debug = "true" *) reg [31:0]                   queue_align;
    (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
@@ -78,51 +79,43 @@ module virtio(
    wire [31:0]                  interrupt_status;
    (* mark_debug = "true" *) reg [31:0]                   interrupt_ack;
    // NOTE: This register does not follow the naming convention of virtio spec.
-   // This is because "state" is too ambigious ...  there are a lot of states!
+   // This is because "status" is too ambigious ...  there are a lot of statuses!
    (* mark_debug = "true" *) reg [31:0]                   device_status;
 
-   (* mark_debug = "true" *) enum reg [3:0]               {
-                                                           WAITING_QUERY, 
-                                                           WAITING_RREADY, 
-                                                           WAITING_BREADY
-                                                           } interface_state;
    
-   typedef enum reg [5:0]       {
-                                 // waiting state
-                                 WAITING_NOTIFICATION,
-
-                                 // main loop
-                                 START_TO_HANDLE,
-                                 WAITING_MEM_AVAIL_IDX,
-                                 LOAD_FIRST_INDEX,
-                                 LOAD_FIRST_DESC,
-                                 HANDLE_FIRST_DESC,
-                                 LOAD_SECOND_DESC,
-                                 HANDLE_SECOND_DESC,
-                                 LOAD_THIRD_DESC,
-                                 HANDLE_THIRD_DESC,
-                                 CONTROL_DISK,   
-                                 WRITE_USED,
-
-                                 // final state
-                                 RAISE_IRQ                                 
-                                 } controller_state_t;
-   (* mark_debug = "true" *) controller_state_t controller_state;
-   const controller_state_t cstate_base = WAITING_NOTIFICATION;
-   
-   (* mark_debug = "true" *) reg                          controller_notified;
-   
+   // mmio interface
+   ///////////////////////
+      
    task init_interface;
       begin
-		 core_arready <= 1'b1;         
+         // mmio registers
+         host_features_sel <= 32'b0;
+         guest_features <= 32'b0;
+         guest_features_sel <= 32'b0;
+         queue_sel <= 32'b0;
+         queue_num <= 32'b0;
+         queue_align <= 32'b0;
+         queue_pfn <= 32'b0;
+         queue_ready <= 32'b0;
+         queue_notify <= 32'b0;
+         interrupt_ack <= 32'b0;
+         device_status <= 32'b0;                                 
+
+         // axi interface
+		 core_arready <= 1'b1;
+         
 		 core_rdata <= 32'h0;
 		 core_rresp <= 2'b00;
-		 core_rvalid <= 1'b0;         
+		 core_rvalid <= 1'b0;
+         
 		 core_bresp <= 2'b00;
-		 core_bvalid <= 1'b0;         
-		 core_awready <= 1'b1;         
+		 core_bvalid <= 1'b0;
+         
+		 core_awready <= 1'b1;
+         
 		 core_wready <= 1'b1;
 
+         // connection to controller
          controller_notified <= 1'b0;        
       end
    endtask
@@ -165,60 +158,88 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0] _data;   
    (* mark_debug = "true" *) reg [3:0]  _wstrb;   
    
-   // this module assumes that only CPU access to this controller.
    always @(posedge clk) begin
 	  if(rstn) begin
-         
-         if (interface_state == WAITING_QUERY) begin
-            if(core_arvalid) begin
-               core_arready <= 0;
-               
-               interface_state <= WAITING_RREADY;               
-               core_rvalid <= 1;
-               core_rdata <= read_reg(core_araddr);               
-            end else if (core_awvalid) begin
-               core_awready <= 0;
-               
-               _addr <= core_awaddr;               
-            end else if (core_wvalid) begin
-               core_wready <= 0;
-               
-               _data <= core_wdata;
-               _wstrb <= core_wstrb;               
-            end else if (!core_awready && !core_wready) begin
-               interface_state <= WAITING_BREADY;
-               // TODO: _wstrb
-               write_reg(_addr, _data);
-               controller_notified <= (_addr == 32'h50);
-               core_bvalid <= 1;
-               core_bresp <= 2'b0;               
-            end
-         end else if (interface_state == WAITING_RREADY) begin
-            if(core_rready) begin
-               core_arready <= 1;
-               
-               interface_state <= WAITING_QUERY;        
-               core_rvalid <= 0;
-            end        
-         end else if (interface_state == WAITING_BREADY) begin
-            if (core_bready) begin
-               core_awready <= 1;
-               core_wready <= 1;
-               
-               interface_state <= WAITING_QUERY;
-               controller_notified <= 1'b0;               
-               core_bvalid <= 1'b0;               
-            end       
+         if (core_arready && core_arvalid) begin
+            core_arready <= 1'b0;
+            
+            core_rvalid <= 1'b1;
+            core_rdata <= read_reg(core_araddr);
+            core_rresp <= 2'b0;            
          end
+
+         if (core_rvalid && core_rready) begin
+            core_rvalid <= 1'b0;
+            core_arready <= 1'b1;            
+         end
+         
+         if (core_awready && core_awvalid) begin
+            core_awready <= 1'b0;
+            
+            _addr <= core_awaddr;               
+         end
+         
+         if (core_wready && core_wvalid) begin
+            core_wready <= 1'b0;
+            
+            _data <= core_wdata;
+            _wstrb <= core_wstrb;               
+         end
+         
+         if (!core_awready && !core_wready) begin
+            interface_state <= WAITING_BREADY;
+            write_reg(_addr, _data);
+            // NOTE: is it okay?
+            controller_notified <= (_addr == 32'h50);
+            core_bvalid <= 1;
+            core_bresp <= 2'b0;               
+         end else begin
+            controller_notified <= 1'b0;                           
+         end
+
+         if (core_bvalid && core_bready) begin
+            core_bvalid <= 1'b0;
+
+            core_awready <= 1'b1;            
+            core_wready <= 1'b1;            
+         end      
 	  end else begin
          init_interface();         
       end
    end
 
+   
+   // disk controller
+   ///////////////////////
+   //    
+   typedef enum reg [5:0]       {
+                                 // waiting state
+                                 WAITING_NOTIFICATION,
 
+                                 // main loop
+                                 START_TO_HANDLE,
+                                 WAITING_MEM_AVAIL_IDX,
+                                 LOAD_FIRST_INDEX,
+                                 LOAD_FIRST_DESC,
+                                 HANDLE_FIRST_DESC,
+                                 LOAD_SECOND_DESC,
+                                 HANDLE_SECOND_DESC,
+                                 LOAD_THIRD_DESC,
+                                 HANDLE_THIRD_DESC,
+                                 CONTROL_DISK,   
+                                 WRITE_USED,
+
+                                 // final state
+                                 RAISE_IRQ                                 
+                                 } controller_state_t;
+   (* mark_debug = "true" *) controller_state_t controller_state;
+   const controller_state_t cstate_base = WAITING_NOTIFICATION;      
+   (* mark_debug = "true" *) reg                          controller_notified;
+
+   // idx cache
    (* mark_debug = "true" *) reg [15:0] avail_idx;
    (* mark_debug = "true" *) reg [15:0] used_idx;
-
+   
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
    wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
@@ -233,9 +254,7 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]  buffer_addr;   
    (* mark_debug = "true" *) reg [31:0]  status_addr;
    
-   // on descriptor
-   ///////////////////////
-   
+   // desc manipulation   
    (* mark_debug = "true" *) reg [3:0]   load_desc_microstate;
    task load_desc(input [31:0] desc_idx, input [5:0] callback_state);
       begin
@@ -278,9 +297,7 @@ module virtio(
       end
    endtask  
 
-   // on outhdr
-   ///////////////////////
-   
+   // outhdr manipulation
    (* mark_debug = "true" *) reg [3:0]   load_outhdr_microstate;
    task load_outhdr;            
       begin
@@ -322,9 +339,7 @@ module virtio(
       end
    endtask
 
-   // disk control
-   ///////////////////////
-   
+   // actual disk control
    (* mark_debug = "true" *) enum reg [3:0] {
                                              CDISK_INIT, 
                                              CDISK_R_DISK, 
@@ -334,7 +349,7 @@ module virtio(
                                              } cdisk_microstate;   
    (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
    (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
-
+   
    task load_disk(input startup);
       begin
          if (startup) begin
@@ -416,7 +431,7 @@ module virtio(
             end
          end
       end
-   endtask // load_mem
+   endtask
 
    task write_disk(input startup);
       begin
@@ -468,12 +483,10 @@ module virtio(
             write_mem(0);            
          end
       end
-   endtask // control_disk
+   endtask
 
    
-   // notify
-   ///////////////////////
-   
+   // notify   
    (* mark_debug = "true" *) enum reg [3:0] {
                                              NOTIFY_INIT, 
                                              NOTIFY_WAITING, 
@@ -521,20 +534,45 @@ module virtio(
          end
       end
    endtask
-   
-   
+
+   integer i;   
+   task init_cdisk_buf;
+      begin
+         for(i = 0; i < 128; i = i + 1) begin
+            cdisk_buf[i] = 32'b0;
+         end
+      end
+   endtask      
+      
    task init_controller;
       begin
+         controller_state <= WAITING_NOTIFICATION;
+
+         // info on desc
          avail_idx <= 32'h0;         
          used_idx <= 32'h0;
+
+         first_idx <= 16'b0;
+         second_idx <= 16'b0;
+         third_idx <= 16'b0;
+                  
+         buffer_addr <= 32'b0;         
+         status_addr <= 32'b0;
+
+         // buf
+         init_cdisk_buf();         
+
+         // microstates
          load_desc_microstate <= 0;
-         load_outhdr_microstate <= 0;
-         
+         load_outhdr_microstate <= 0;         
          cdisk_microstate <= CDISK_INIT;
-         cdisk_loop_index <= 0;         
-         
+         cdisk_loop_index <= 0;
+         notify_microstate <= NOTIFY_INIT;         
+
+         // interrupt signal to plic
          virtio_interrupt <= 1'b0;
-         
+
+         // mem interface
          mem_request_enable <= 1'b0;
          mem_mode <= 1'b0;
          mem_addr <= 32'b0;
