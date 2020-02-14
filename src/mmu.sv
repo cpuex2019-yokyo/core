@@ -51,7 +51,7 @@ module mmu(
                               } memistate_t;
    (* mark_debug = "true" *) memistate_t                 state;
 
-   typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
+   (* mark_debug = "true" *) typedef enum reg          {CAUSE_FETCH, CAUSE_MEM} memicause_t;
    (* mark_debug = "true" *) memicause_t operation_cause;
 
    // 0 for Bare
@@ -59,10 +59,10 @@ module mmu(
    wire                      paging_mode = satp[31];   
    wire [21:0]               satp_ppn = satp[21:0];
    
-   reg [31:0]                _vaddr;   
-   reg                       _mode;
-   reg [31:0]                _wdata;
-   reg [3:0]                 _wstrb;   
+   (* mark_debug = "true" *) reg [31:0]                _vaddr;   
+   (* mark_debug = "true" *) reg                       _mode;
+   (* mark_debug = "true" *) reg [31:0]                _wdata;
+   (* mark_debug = "true" *) reg [3:0]                 _wstrb;   
    
    // utils
    ///////////////////
@@ -189,7 +189,7 @@ module mmu(
    
    // TLB
    ///////////////////      
-   reg [42:0]                tlb_table [0:15];
+   (* mark_debug = "true" *) reg [42:0]                tlb_table [0:15];
    
    function [0:0] tlb_valid(input [42:0] entry);
       begin
