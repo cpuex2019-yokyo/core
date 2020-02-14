@@ -41,13 +41,29 @@ module virtio(
               input wire [31:0] mem_data,
 
               // bus for disk
-              output reg        disk_request_enable,
-              output reg        disk_mode,
-              output reg [31:0] disk_addr,
-              output reg [31:0] disk_wdata,
-              output reg [3:0]  disk_wstrb, 
-              input wire        disk_response_enable,
-              input wire [31:0] disk_data,
+               output reg [31:0] m_spi_araddr,
+               input wire        m_spi_arready,
+               output reg        m_spi_arvalid,
+               output reg [2:0]  m_spi_arprot,
+
+               input wire [31:0] m_spi_rdata,
+               output reg        m_spi_rready,
+               input wire [1:0]  m_spi_rresp,
+               input wire        m_spi_rvalid,
+
+               output reg        m_spi_bready,
+               input wire [1:0]  m_spi_bresp,
+               input wire        m_spi_bvalid,
+
+               output reg [31:0] m_spi_awaddr,
+               input wire        m_spi_awready,
+               output reg        m_spi_awvalid,
+               output reg [2:0]  m_spi_awprot,
+
+               output reg [31:0] m_spi_wdata,
+               input wire        m_spi_wready,
+               output reg [3:0]  m_spi_wstrb,
+               output reg        m_spi_wvalid,
 
               // general
               output reg        virtio_interrupt
@@ -335,28 +351,259 @@ module virtio(
    reg [6:0]      cdisk_loop_index;
    reg [31:0]     cdisk_buf [0:127];
 
+   enum reg [3:0] {
+      SPI_IDLE,
+      SPI_PREPARE,
+      SPI_ERASE,
+      SPI_PROGRAM,
+      SPI_WIP,
+      SPI_READ
+   } spi_mode;
+
+   enum reg [3:0] {
+      SPI_STATE_COMMAND,
+      SPI_STATE_ENABLE,
+      SPI_STATE_WIP,
+      SPI_STATE_READ,
+      SPI_STATE_DISABLE
+   } spi_state;
+
+   reg [7:0] spi_phase;
+   reg [1:0] spi_rep;
+   reg [1:0] spi_prepare_state;
+   reg [1:0] spi_wip_state;
+   reg spi_wenable;
+
+   task spi_command();
+      begin
+         spi_phase <= spi_phase + 8'h1;
+         if(spi_phase == 8'hfa) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h1e6;
+            spi_phase <= 8'hff;
+         end else if(spi_phase == 8'hfb) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h1;
+            spi_phase <= 8'h0;
+         end else if(spi_phase == 8'hfc) begin
+            m_spi_awaddr <= 32'h68;
+            if(spi_mode == SPI_PREPARE) begin
+               m_spi_wdata <= 32'h06;
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+            end else if(spi_mode == SPI_ERASE) begin
+               m_spi_wdata <= 32'h20;
+            end else if(spi_mode == SPI_PROGRAM) begin
+               m_spi_wdata <= 32'h02;
+            end else if(spi_mode == SPI_WIP) begin
+               m_spi_wdata <= 32'h05;
+            end else if(spi_mode == SPI_READ) begin
+               m_spi_wdata <= 32'h03;
+            end
+         end else if(spi_phase == 8'hfd) begin
+            if(spi_mode == SPI_WIP) begin
+               m_spi_wdata <= 32'hff;
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 32'h0;
+            end else begin
+               m_spi_wdata <= {24'h0, outhdr.sector[11:4]};
+            end
+         end else if(spi_phase == 8'hfe) begin
+            m_spi_wdata <= {24'h0, outhdr.sector[3:0], 4'h0};
+         end else if(spi_phase == 8'hff) begin
+            m_spi_wdata <= 32'h0;
+            if(spi_mode == SPI_ERASE) begin
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+            end
+         end else if(spi_phase < 8'h80) begin
+            m_spi_wdata <= spi_mode == SPI_PROGRAM ? {24'h0, cdisk_buf[{spi_rep, spi_phase[6:2]}][{spi_phase[1:0], 3'h0} +: 5'h8]} : 32'hff;
+            if(spi_phase == 8'h7f) begin
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+               spi_rep <= spi_rep + 2'h1;
+            end
+         end
+      end
+   endtask
+
+   task spi_enable();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h0;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h86;
+            spi_wenable <= 1'b0;
+            spi_phase <= 8'h2;
+         end else if(spi_phase == 8'h2) begin
+            m_spi_arvalid <= 1'b1;
+            m_spi_rready <= 1'b1;
+            m_spi_araddr <= 32'h20;
+            spi_phase <= 8'h3;
+         end else begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               if(m_spi_rdata[2]) begin
+                  m_spi_rready <= 1'b0;
+                  spi_phase <= 1'b0;
+                  if(spi_mode == SPI_WIP) begin
+                     spi_state <= SPI_STATE_WIP;
+                  end else if(spi_mode == SPI_READ) begin
+                     spi_state <= SPI_STATE_READ;
+                     spi_phase <= 8'hfc;
+                     m_spi_arvalid <= 1'b1;
+                     m_spi_rready <= 1'b1;
+                     m_spi_araddr <= 32'h6c;
+                  end else begin
+                     spi_wenable <= 1'b1;
+                     spi_state <= SPI_STATE_DISABLE;
+                  end
+               end else begin
+                  m_spi_arvalid <= 1'b1;
+               end
+            end
+         end
+      end
+   endtask
+
+   task spi_disable();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h1e6;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h1;
+            spi_phase <= 8'h2;
+         end else if(spi_phase == 8'h2) begin
+            m_spi_awaddr <= 32'h20;
+            m_spi_wdata <= 32'h4;
+            spi_state <= SPI_STATE_COMMAND;
+            spi_phase <= 8'hfc;
+            if(spi_mode == SPI_PREPARE) begin
+               if(spi_prepare_state == 2'h0) begin
+                  spi_mode <= SPI_READ;
+               end else if(spi_prepare_state == 2'h1)begin
+                  spi_mode <= SPI_PREPARE;
+                  spi_prepare_state <= 2'h2;
+               end else if(spi_prepare_state == 2'h2)begin
+                  spi_mode <= SPI_ERASE;
+               end else if(spi_prepare_state == 2'h3)begin
+                  spi_mode <= SPI_PROGRAM;
+               end
+            end else if(spi_mode == SPI_ERASE) begin
+               spi_mode <= SPI_WIP;
+               spi_wip_state <= 2'h2;
+            end else if(spi_mode == SPI_PROGRAM) begin
+               if(spi_rep == 2'h0) begin
+                  spi_mode <= SPI_WIP;
+                  spi_wip_state <= 2'h3;
+               end
+            end else if(spi_mode == SPI_WIP) begin
+               if(spi_wip_state == 2'h0) begin
+                  spi_mode <= SPI_PROGRAM;
+               end else if(spi_wip_state == 2'h1)begin
+                  spi_mode <= SPI_IDLE;
+                  cdisk_microstate <= CDISK_INIT;
+                  controller_state <= WRITE_USED;
+               end
+            end else if(spi_mode == SPI_READ) begin
+               if(spi_rep == 2'h0) begin
+                  spi_mode <= SPI_IDLE;
+                  cdisk_microstate <= CDISK_W_MEM;
+               end
+            end
+         end
+      end
+   endtask
+
+   task spi_reading();
+      begin
+         if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+            spi_phase <= spi_phase + 8'h1;
+            m_spi_arvalid <= 1'b1;
+            if(spi_phase < 8'h80) begin
+               cdisk_buf[{spi_rep, spi_phase[6:2]}][{spi_phase[1:0], 3'h0} +: 5'h8] <= m_spi_rdata[7:0];
+               if(spi_phase == 8'h7f) begin
+                  m_spi_arvalid <= 1'b0;
+                  m_spi_rready <= 1'b0;
+                  spi_wenable <= 1'b1;
+                  spi_state <= SPI_STATE_DISABLE;
+                  spi_phase <= 8'h0;
+                  spi_rep <= spi_rep + 2'h1;
+               end
+            end
+         end
+      end
+   endtask
+
+   task spi_watch_wip();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_arvalid <= 1'b1;
+            m_spi_rready <= 1'b1;
+            m_spi_araddr <= 32'h6c;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               m_spi_arvalid <= 1'b1;
+               spi_phase <= 8'h2;
+            end
+         end else if(spi_phase == 8'h2) begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               m_spi_rready <= 1'b0;
+               spi_wip_state[1] <= m_spi_rdata[0];
+               spi_wenable <= 1'b1;
+               spi_state <= SPI_STATE_DISABLE;
+            end
+         end
+      end
+   endtask
+
    task load_disk(input startup);
       begin
          if (startup) begin
-            cdisk_loop_index <= 0;
-            disk_request_enable <= 1'b1;
-            disk_mode <= MEMREQ_READ;
-            disk_addr <= {outhdr.sector[22:0], 9'b0};            
+            spi_mode <= SPI_PREPARE;
+            spi_state <= SPI_STATE_COMMAND;   
+            spi_phase <= 8'hfa;
+            spi_rep <= 2'h0;
+            spi_prepare_state <= 2'h0;
+            spi_wenable <= 1'b1;
+         end else if(~m_spi_bready) begin 
+            if(spi_state == SPI_STATE_COMMAND) begin
+               spi_command();
+            end else if(spi_state == SPI_STATE_ENABLE) begin
+               spi_enable();
+            end else if(spi_state == SPI_STATE_DISABLE) begin
+               spi_disable();
+            end else if(spi_state == SPI_STATE_READ) begin
+               spi_reading();
+            end
+         end
+      end
+   endtask
+
+   task write_disk(input startup);
+      begin
+         if (startup) begin
+            spi_mode <= SPI_PREPARE;
+            spi_state <= SPI_STATE_COMMAND;   
+            spi_phase <= 8'hfa;
+            spi_rep <= 2'h0;
+            spi_prepare_state <= 2'h1;
+            spi_wenable <= 1'b1;
          end else begin
-            if (disk_response_enable) begin
-               if (cdisk_loop_index == 127) begin
-                  cdisk_microstate <= CDISK_W_MEM;
-                  write_mem(1);                  
-               end else begin
-                  cdisk_buf[cdisk_loop_index] <= disk_data;               
-                  cdisk_loop_index <= cdisk_loop_index + 1;
-                  
-                  disk_request_enable <= 1'b1;
-                  disk_mode <= MEMREQ_READ;
-                  disk_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
-               end
-            end else begin
-               disk_request_enable <= 1'b0;                           
+            if(spi_state == SPI_STATE_COMMAND) begin
+               spi_command();
+            end else if(spi_state == SPI_STATE_ENABLE) begin
+               spi_enable();
+            end else if(spi_state == SPI_STATE_WIP) begin
+               spi_watch_wip();
+            end else if(spi_state == SPI_STATE_DISABLE) begin
+               spi_disable();
             end
          end
       end
@@ -418,35 +665,6 @@ module virtio(
       end
    endtask // load_mem
 
-   task write_disk(input startup);
-      begin
-         if (startup) begin
-            cdisk_loop_index <= 0;
-            disk_request_enable <= 1'b1;
-            disk_mode <= MEMREQ_WRITE;
-            disk_wdata <= cdisk_buf[0];
-            disk_wstrb <= 4'b1111;
-            disk_addr <= {outhdr.sector[22:0], 9'b0};            
-         end else begin
-            if (disk_response_enable) begin
-               if (cdisk_loop_index == 127) begin
-                  cdisk_microstate <= CDISK_INIT;
-                  controller_state <= WRITE_USED;
-               end else begin
-                  cdisk_loop_index <= cdisk_loop_index + 1;               
-                  disk_request_enable <= 1'b1;
-                  disk_mode <= MEMREQ_WRITE;
-                  disk_wdata <= cdisk_buf[cdisk_loop_index + 1];
-                  disk_wstrb <= 4'b1111;
-                  disk_addr <= {outhdr.sector[22:0], 9'b0} + (cdisk_loop_index+1);
-               end                  
-            end else begin
-               disk_request_enable <= 1'b0;                           
-            end
-         end
-      end
-   endtask
-   
    task control_disk;
       begin
          if (cdisk_microstate == CDISK_INIT) begin
@@ -539,7 +757,20 @@ module virtio(
          mem_mode <= 1'b0;
          mem_addr <= 32'b0;
          mem_wdata <= 32'b0;
-         mem_wstrb <= 4'b0;               
+         mem_wstrb <= 4'b0;
+
+         m_spi_araddr <= 32'h0;
+			m_spi_arvalid <= 1'b0;
+			m_spi_arprot <= 3'b000;
+			m_spi_rready <= 1'b0;
+			m_spi_bready <= 1'b0;
+			m_spi_awaddr <= 32'h0;
+			m_spi_awvalid <= 1'b0;
+			m_spi_awprot <= 3'b000;
+			m_spi_wdata <= 32'h0;
+			m_spi_wstrb <= 4'b1111;
+			m_spi_wvalid <= 1'b0;
+         spi_wenable <= 1'b0;           
       end
    endtask
 
@@ -607,6 +838,28 @@ module virtio(
          end else if (controller_state == RAISE_IRQ) begin
             virtio_interrupt <= 1'b1;            
             controller_state <= WAITING_NOTIFICATION;            
+         end
+
+         if(m_spi_arready && m_spi_arvalid) m_spi_arvalid <= 1'b0;
+         if(m_spi_rready && m_spi_rvalid) begin
+            if(m_spi_rresp[1]) begin
+               m_spi_arvalid <= 1'b1;
+            end
+         end
+         if(m_spi_awready && m_spi_awvalid) m_spi_awvalid <= 1'b0;
+         if(m_spi_wready && m_spi_wvalid) m_spi_wvalid <= 1'b0;
+         if(m_spi_bready && m_spi_bvalid) begin
+            if(m_spi_bresp[1]) begin
+               m_spi_awvalid <= 1'b1;
+               m_spi_wvalid <= 1'b1;
+            end else begin
+               m_spi_bready <= 1'b0;
+            end
+         end
+         if(spi_wenable && ~m_spi_bready) begin
+            m_spi_awvalid <= 1'b1;
+            m_spi_wvalid <= 1'b1;
+            m_spi_bready <= 1'b1;
          end
       end else begin 
          init_controller();
