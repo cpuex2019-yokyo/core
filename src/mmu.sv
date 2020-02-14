@@ -156,9 +156,9 @@ module mmu(
       end
    endfunction // is_appropriate_operation
 
-   function has_permission(input [31:0] pte);
+   function [0:0] has_permission(input [31:0] pte);
       begin
-         has_permission = is_appropriate_usermode(pte) && is_appropriate_operation(pte);         
+         has_permission = is_appropriate_usermode(pte) && is_appropriate_operation(pte);
       end
    endfunction
    
@@ -312,18 +312,20 @@ module mmu(
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
          end else begin
             if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
-               raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});            
-            end else begin
-               state <= WAITING_RESPONSE;
-               req_mode <= _mode;
-               req_wdata <= _wdata;
-               req_wstrb <= _wstrb;
-               // NOTE: 34 -> 32
-               req_addr <= level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
-               // NOTE: 34 -> 22
-               set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
-               request_enable <= 1'b1;                  
+               // raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});
+               // v1.10.0 p.64
+               // TODO: update A bit on PTE
             end
+            
+            state <= WAITING_RESPONSE;
+            req_mode <= _mode;
+            req_wdata <= _wdata;
+            req_wstrb <= _wstrb;
+            // NOTE: 34 -> 32
+            req_addr <= level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
+            // NOTE: 34 -> 22
+            set_tlb(_vaddr, level == 1'b1? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+            request_enable <= 1'b1;                  
          end
       end
    endtask // handle_leaf
