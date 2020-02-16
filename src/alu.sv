@@ -79,10 +79,11 @@ module alu
                      instr.mulh? mul_temp[63:32]:
                      instr.mulhsu? mul_temp_hsu[63:32]:
                      instr.mulhu? mul_temp_hu[63:32]:
-                     instr.div? $signed(register.rs1) / $signed(register.rs2):
-                     instr.divu? (register.rs2 == 32'b0) ? 32'b0 : register.rs1 / register.rs2:
-                     instr.rem? $signed(register.rs1) % $signed(register.rs2):
-                     instr.remu? register.rs1 % register.rs2:                 
+                     // zero division does not cause any exceptions in RISC-V
+                     instr.div? (register.rs2 == 32'b0 ? 32'b0 : $signed(register.rs1) / $signed(register.rs2)):
+                     instr.divu? (register.rs2 == 32'b0 ? 32'b0 : register.rs1 / register.rs2):
+                     instr.rem? (register.rs2 == 32'b0 ? 32'b0 : $signed(register.rs1) % $signed(register.rs2)):
+                     instr.remu? (register.rs2 == 32'b0 ? 32'b0 : register.rs1 % register.rs2):                 
                      ///// rv32m /////
                      instr.amoswap? 32'b0: // will be handed in core.sv
                      instr.amoand? 32'b0: // will be handed in core.sv
