@@ -1,7 +1,10 @@
 `default_nettype none
+`include "def.sv"
+
 module adoptor #(
                  parameter OFFSET = 0,
                  parameter BASE = 0,
+                 parameter CHANGE_ENDIAN = 0,
                  parameter DEST_WIDTH = 32           
                  ) (
                     // master (to)
@@ -110,7 +113,7 @@ module adoptor #(
             m_rready <= 1'b0;
             
             s_rvalid <= 1'b1;         
-            s_rdata <= m_rdata;
+            s_rdata <= CHANGE_ENDIAN == 0? m_rdata : to_le32(m_rdata);
             s_rresp <= m_rresp;
          end
          if (s_rvalid && s_rready) begin
@@ -130,7 +133,7 @@ module adoptor #(
             s_wready <= 1'b0;
             
             m_wvalid <= 1'b1;         
-            m_wdata <= s_wdata;
+            m_wdata <= CHANGE_ENDIAN == 0? s_wdata : to_le32(s_wdata);
             m_wstrb <= s_wstrb;
          end
          if (m_awvalid && m_awready) begin
