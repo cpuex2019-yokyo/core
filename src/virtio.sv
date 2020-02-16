@@ -367,13 +367,13 @@ module virtio(
             disk_addr <= {outhdr.sector[22:0], 9'b0};            
          end else begin
             if (disk_response_enable) begin
+               cdisk_buf[cdisk_loop_index] <=  disk_data;                  
+               cdisk_loop_index <= cdisk_loop_index + 1;
+               
                if (cdisk_loop_index == 127) begin
                   cdisk_microstate <= CDISK_W_MEM;
                   write_mem(1);                  
-               end else begin
-                  cdisk_buf[cdisk_loop_index] <=  disk_data;                  
-                  cdisk_loop_index <= cdisk_loop_index + 1;
-                  
+               end else begin                  
                   disk_request_enable <= 1'b1;
                   disk_mode <= MEMREQ_READ;
                   disk_addr <= {outhdr.sector[22:0], 9'b0} + 4 * (cdisk_loop_index+1);
@@ -430,14 +430,14 @@ module virtio(
             mem_addr <= buffer_addr;
          end else begin
             if (mem_response_enable) begin
+               cdisk_buf[cdisk_loop_index] <= mem_data;                  
+               cdisk_loop_index <= cdisk_loop_index + 1;
+               
                if (cdisk_loop_index == 127) begin
                   cdisk_microstate <= CDISK_W_DISK;
                   write_disk(1);                  
                end else begin
-                  // TODO: endian! it should not be change data endian.
-                  cdisk_buf[cdisk_loop_index] <= mem_data;                  
-                  cdisk_loop_index <= cdisk_loop_index + 1;
-                  
+                  // TODO: endian! it should not be change data endian.                  
                   mem_request_enable <= 1'b1;
                   mem_mode <= MEMREQ_READ;
                   mem_addr <= buffer_addr + 4 * (cdisk_loop_index+1);
