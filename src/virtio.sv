@@ -272,7 +272,7 @@ module virtio(
          end else if (load_desc_microstate == 1) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 2;
-               desc.addr[31:0] <= mem_data;               
+               desc.addr[31:0] <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
                mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 8;               
@@ -292,9 +292,9 @@ module virtio(
          end else if (load_desc_microstate == 3) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 0;
-               // note: memory is little endian!
-               desc.flags <= mem_data[15:0];
-               desc.next <= mem_data[31:16];               
+               // NOTE: endian
+               desc.flags <= to_le16(mem_data[31:16]);               
+               desc.next <= to_le16(mem_data[15:0]);               
                controller_state <= cstate_base.next(callback_state);               
             end else begin
                mem_request_enable <= 0;            
@@ -316,7 +316,7 @@ module virtio(
          end else if (load_outhdr_microstate == 1) begin
             if (mem_response_enable) begin
                load_outhdr_microstate <= 2;
-               outhdr.btype[31:0] <= mem_data;               
+               outhdr.btype[31:0] <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
                mem_addr <= desc.addr[31:0] + 8;
@@ -326,7 +326,7 @@ module virtio(
          end else if (load_outhdr_microstate == 2) begin
             if (mem_response_enable) begin
                load_outhdr_microstate <= 3;
-               outhdr.sector[63:32] <= mem_data;               
+               outhdr.sector[31:0] <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
                mem_addr <= desc.addr[31:0] + 12;
@@ -337,7 +337,7 @@ module virtio(
             if (mem_response_enable) begin
                load_outhdr_microstate <= 0;
                controller_state <= LOAD_SECOND_DESC;               
-               outhdr.sector[31:0] <= mem_data;               
+               outhdr.sector[63:32] <= to_le32(mem_data);               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -372,7 +372,7 @@ module virtio(
                   cdisk_microstate <= CDISK_W_MEM;
                   write_mem(1);                  
                end else begin
-                  cdisk_buf[cdisk_loop_index] <=  {disk_data[7:0], disk_data[15:8], disk_data[23:16], disk_data[31:24]};               
+                  cdisk_buf[cdisk_loop_index] <=  to_le32(disk_data);                  
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   disk_request_enable <= 1'b1;
@@ -435,8 +435,8 @@ module virtio(
                   cdisk_microstate <= CDISK_W_DISK;
                   write_disk(1);                  
                end else begin
-                  // TODO: endian!
-                  cdisk_buf[cdisk_loop_index]  <= {mem_data[7:0], mem_data[15:8], mem_data[23:16], mem_data[31:24]};               
+                  // TODO: endian! it should not be change data endian.
+                  cdisk_buf[cdisk_loop_index]  <= mem_data;                  
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   mem_request_enable <= 1'b1;
@@ -653,8 +653,8 @@ module virtio(
          end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
             if (mem_response_enable) begin
                // TODO: check for unaligned mem access
-               avail_idx <= mem_data[31:16];
-               if (used_idx != mem_data[31:16]) begin
+               avail_idx <= to_le16(mem_data[31:16]);
+               if (used_idx != to_le16(mem_data[31:16])) begin
                   used_idx <= used_idx + 1;
                   controller_state <= LOAD_FIRST_INDEX;
 
@@ -671,7 +671,7 @@ module virtio(
             mem_request_enable <= 0;
             if (mem_response_enable) begin
                // TODO: check for unaligned mem access            
-               first_idx <= mem_data[31:16];
+               first_idx <= to_le16(mem_data[31:16]);
                controller_state <= LOAD_FIRST_DESC;
             end
          end else if (controller_state == LOAD_FIRST_DESC) begin
