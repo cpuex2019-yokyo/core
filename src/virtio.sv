@@ -554,7 +554,7 @@ module virtio(
       begin
          if (notify_microstate == NOTIFY_INIT) begin
             notify_microstate <= NOTIFY_WAITING;
-            // write used->id
+            // write to used->id
             mem_request_enable <= 1'b1;
             mem_mode <= MEMREQ_WRITE;
             mem_wdata <= {16'b0, to_le16(used_idx)};
@@ -564,23 +564,23 @@ module virtio(
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
                notify_microstate <= NOTIFY_WAITING2;
-
+               // write to used[used_idx-1].id
                mem_request_enable <= 1'b1;
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= to_le32({16'b0, first_idx});
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 8 * (used_idx-1);
+               mem_addr <= used_head + 4 + 8 * (used_idx-1);
             end
          end else if (notify_microstate == NOTIFY_WAITING2) begin
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
                notify_microstate <= NOTIFY_WAITING3;
-
+               // write to used[used_idx-1].len
                mem_request_enable <= 1'b1;
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= 32'b0; // TODO(linux): set appropriate value
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 8 * (used_idx-1) + 4;
+               mem_addr <= used_head + 4 + 8 * (used_idx-1) + 4;
             end
          end else if (notify_microstate == NOTIFY_WAITING3) begin
             mem_request_enable <= 1'b0;                 
