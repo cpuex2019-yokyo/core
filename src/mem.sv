@@ -51,6 +51,7 @@ module mem(
       init();
    end
    // NOTE: amo* uses register.rs1 to tell the address and others use arg.
+   // TODO(linux): fix endian
    wire [31:0] _addr = (is_a_write|is_a_read)? register.rs1 : arg;
    always @(posedge clk) begin
       if(rstn) begin
