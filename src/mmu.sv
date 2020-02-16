@@ -64,6 +64,8 @@ module mmu(
    (* mark_debug = "true" *) reg [31:0]                _wdata;
    (* mark_debug = "true" *) reg [3:0]                 _wstrb;   
    
+   wire [31:0]               resp_data_le = to_le32(resp_data);
+   
    // utils
    ///////////////////
    
@@ -381,33 +383,34 @@ module mmu(
                end
             end
          end else if (state == FETCHING_FIRST_PTE && response_enable) begin
-            if (resp_data[0] == 0 || (resp_data[1] == 0 && resp_data[2] == 1)) begin
-               raise_pagefault_exception(5'd4, {resp_data[0], resp_data[1], resp_data[2], 24'b0});               
+            if (resp_data_le[0] == 0 || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
+               raise_pagefault_exception(5'd4, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0});               
             end else begin
-               if (resp_data[1] == 1 || resp_data[3] == 1) begin
+               if (resp_data_le[1] == 1 || resp_data_le[3] == 1) begin
                   // PTE seems to be a leaf node.
-                  handle_leaf(1, resp_data);                  
+                  handle_leaf(1, resp_data_le);                  
                end else begin
                   // not a leaf node. 
                   state <= FETCHING_SECOND_PTE;                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
-                  req_addr <= {resp_data[29:10], 12'b0} + vpn0(_vaddr) * 4;
+                  req_addr <= {resp_data_le[29:10], 12'b0} + vpn0(_vaddr) * 4;
                end
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin
-            if (resp_data[0] == 0 || (resp_data[1] == 0 && resp_data[2] == 1)) begin
-               raise_pagefault_exception(5'd5, {resp_data[0], resp_data[1], resp_data[2], 24'b0});               
+            if (resp_data_le[0] == 0 || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
+               raise_pagefault_exception(5'd5, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0});               
             end else begin
-               if (resp_data[1] == 1 || resp_data[3] == 1) begin
+               if (resp_data_le[1] == 1 || resp_data_le[3] == 1) begin
                   // PTE seems to be a leaf node.
-                  handle_leaf(0, resp_data);                  
+                  handle_leaf(0, resp_data_le);                  
                end else begin
-                  raise_pagefault_exception(5'd6, {resp_data[1], resp_data[3], 25'b0});               
+                  raise_pagefault_exception(5'd6, {resp_data_le[1], resp_data_le[3], 25'b0});               
                end
             end
          end else if (state == WAITING_RESPONSE && response_enable) begin
-            state <= WAITING_RECEIVE;            
+            state <= WAITING_RECEIVE;
+            // here we does not change endian.
             if (operation_cause == CAUSE_FETCH) begin
                fetch_response_enable <= 1'b1;               
                fresp_data <= resp_data;
