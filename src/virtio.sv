@@ -529,9 +529,7 @@ module virtio(
             end
          end
       end
-   endtask
-   
-
+   endtask   
    
    // notify   
    (* mark_debug = "true" *) enum reg [3:0] {

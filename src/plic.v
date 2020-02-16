@@ -27,18 +27,21 @@ module plic(
 
 	        input wire        virtio_intr,
 	        input wire        uart_intr,
-	        output wire       external_intr,
+
+            // S-mode external interrupt
+	        output wire       external_intr_s,
 
 	        input wire        clk,
 	        input wire        rstn
             );
 
+   // TODO(linux): settings for machine modes
    localparam virtio_priority_addr = 32'h4;	// virtio : 1
    localparam uart_priority_addr = 32'h28;		// uart   : 10
    localparam pending_addr = 32'h1000;			// Read Only
-   localparam enable_addr = 32'h2000;
-   localparam priority_threshold_addr = 32'h200000;
-   localparam claim_complete_addr = 32'h200000;
+   localparam senable_addr = 32'h2080;
+   localparam spriority_threshold_addr = 32'h201000;
+   localparam sclaim_scomplete_addr = 32'h201004;
 
    reg [2:0]                  virtio_priority, uart_priority;
    reg                        virtio_pending, uart_pending;
@@ -74,7 +77,7 @@ module plic(
 			   axi_rdata <= {29'h0, uart_priority};
 			end else if(axi_araddr == pending_addr) begin
 			   axi_rdata <= {21'h0, uart_pending, 8'h0, virtio_pending, 1'b0};
-			end else if(axi_araddr == enable_addr) begin
+			end else if(axi_araddr == senable_addr) begin
 			   axi_rdata <= {21'h0, uart_enable, 8'h0, virtio_enable, 1'b0};
 			end else if(axi_araddr == priority_threshold_addr) begin
 			   axi_rdata <= {29'h0, priority_threshold};
@@ -94,7 +97,7 @@ module plic(
 			   virtio_priority <= axi_wdata[2:0];
 			end else if(axi_awaddr == uart_priority_addr) begin
 			   uart_priority <= axi_wdata[2:0];
-			end else if(axi_araddr == enable_addr) begin
+			end else if(axi_araddr == senable_addr) begin
 			   virtio_enable <= axi_wdata[1];
 			   uart_enable <= axi_wdata[10];
 			end else if(axi_awaddr == priority_threshold_addr) begin
