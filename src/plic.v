@@ -53,7 +53,7 @@ module plic(
    assign virtio_active = virtio_pending && virtio_priority > priority_threshold;
    assign uart_active = uart_pending && uart_priority > priority_threshold;
    assign claim = virtio_active && (~uart_active || virtio_priority >= uart_priority) ? 32'd1 : uart_active ? 32'd10 : 32'd0;
-   assign external_intr = claim != 32'd0;
+   assign external_intr_s = claim != 32'd0;
 
    always @(posedge clk) begin
 	  if(~rstn) begin
@@ -65,8 +65,14 @@ module plic(
 		 axi_bvalid <= 1'b0;
 		 axi_awready <= 1'b1;
 		 axi_wready <= 1'b1;
+		 
+		 priority_threshold <= 3'b0;
 		 virtio_pending <= 1'b0;
 		 uart_pending <= 1'b0;
+		 virtio_enable <= 1'b0;
+		 uart_enable <= 1'b0;
+		 virtio_priority <= 3'b0;
+		 uart_priority <= 3'b0;
 	  end else begin
 		 if(axi_arvalid) begin
 			axi_rvalid <= 1'b1;
@@ -79,9 +85,9 @@ module plic(
 			   axi_rdata <= {21'h0, uart_pending, 8'h0, virtio_pending, 1'b0};
 			end else if(axi_araddr == senable_addr) begin
 			   axi_rdata <= {21'h0, uart_enable, 8'h0, virtio_enable, 1'b0};
-			end else if(axi_araddr == priority_threshold_addr) begin
+			end else if(axi_araddr == spriority_threshold_addr) begin
 			   axi_rdata <= {29'h0, priority_threshold};
-			end else if(axi_araddr == claim_complete_addr) begin
+			end else if(axi_araddr == sclaim_scomplete_addr) begin
 			   axi_rdata <= claim;
 			end else begin
 			   axi_rresp <= 2'b10;
@@ -97,12 +103,12 @@ module plic(
 			   virtio_priority <= axi_wdata[2:0];
 			end else if(axi_awaddr == uart_priority_addr) begin
 			   uart_priority <= axi_wdata[2:0];
-			end else if(axi_araddr == senable_addr) begin
+			end else if(axi_awaddr == senable_addr) begin
 			   virtio_enable <= axi_wdata[1];
 			   uart_enable <= axi_wdata[10];
-			end else if(axi_awaddr == priority_threshold_addr) begin
+			end else if(axi_awaddr == spriority_threshold_addr) begin
 			   priority_threshold <= axi_wdata;
-			end else if(axi_awaddr == claim_complete_addr) begin
+			end else if(axi_awaddr == sclaim_scomplete_addr) begin
 			   if(axi_wdata == 32'd1) begin
 				  virtio_pending <= 1'b0;
 			   end else if(axi_wdata == 32'd10) begin

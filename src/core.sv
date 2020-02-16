@@ -182,7 +182,7 @@ module core
    // - timer_intr from CLINT is machine-level timer intr
    wire [31:0]        intr_mask = {20'b0, 4'b1000, 4'b1000, 4'b0000};
    (* mark_debug = "true" *) reg [31:0] _mip_shadow;   
-   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & intr_mask) | {20'b0, 1'b0, ext_intr, 2'b0, timer_intr, 3'b0, 4'b0};
+   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & intr_mask) | {20'b0, 2'b0, ext_intr, 1'b0, timer_intr, 3'b0, 4'b0};
    wire               software_intr = |(_mip[3:0]);
    wire               software_intr_m = _mip[3];
    wire               software_intr_s = _mip[2];   
@@ -1065,7 +1065,7 @@ module core
                set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
                
                set_epc(next_cpu_mode_when_interrupted, instr.pc);                  
-               set_cause(next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
+               set_cause(next_cpu_mode_when_interrupted, {1'b1, exception_vec_when_interrupted[30:0]});
                set_tval(next_cpu_mode_when_interrupted, 32'd0);
                set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
             end else if (instr.mret) begin

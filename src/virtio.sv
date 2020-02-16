@@ -372,7 +372,7 @@ module virtio(
                   cdisk_microstate <= CDISK_W_MEM;
                   write_mem(1);                  
                end else begin
-                  cdisk_buf[cdisk_loop_index] <= disk_data;               
+                  cdisk_buf[cdisk_loop_index] <=  {disk_data[7:0], disk_data[15:8], disk_data[23:16], disk_data[31:24]};               
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   disk_request_enable <= 1'b1;
@@ -435,7 +435,8 @@ module virtio(
                   cdisk_microstate <= CDISK_W_DISK;
                   write_disk(1);                  
                end else begin
-                  cdisk_buf[cdisk_loop_index]  <= mem_data;               
+                  // TODO: endian!
+                  cdisk_buf[cdisk_loop_index]  <= {mem_data[7:0], mem_data[15:8], mem_data[23:16], mem_data[31:24]};               
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   mem_request_enable <= 1'b1;
@@ -535,7 +536,9 @@ module virtio(
             end
          end
       end
-   endtask   
+   endtask
+   
+
    
    // notify   
    (* mark_debug = "true" *) enum reg [3:0] {
