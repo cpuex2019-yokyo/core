@@ -412,10 +412,10 @@ module virtio(
                   mem_mode <= MEMREQ_WRITE;
                   mem_wdata <= cdisk_buf[cdisk_loop_index + 1];
                   mem_wstrb <= 4'b1111;
-                  mem_addr <= buffer_addr + 4 * (cdisk_loop_index+1);
+                  mem_addr <= buffer_addr + 4 * (cdisk_loop_index + 1);
                end                  
             end else begin
-               disk_request_enable <= 1'b0;                           
+               mem_request_enable <= 1'b0;                           
             end
          end
       end
