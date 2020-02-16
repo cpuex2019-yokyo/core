@@ -65,7 +65,7 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]                   guest_features_sel;
    (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
    (* mark_debug = "true" *) reg [31:0]                   queue_sel;
-   wire [31:0]                  queue_num_max = queue_sel == 32'b0? 32'd8 : 32'd0;
+   wire [31:0]                  queue_num_max = (queue_sel == 32'b0)? 32'd8 : 32'd0;
    (* mark_debug = "true" *) reg [31:0]                   queue_num;
    (* mark_debug = "true" *) reg [31:0]                   queue_align;
    (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
@@ -82,6 +82,9 @@ module virtio(
    // This is because "status" is too ambigious ...  there are a lot of statuses!
    (* mark_debug = "true" *) reg [31:0]                   device_status;
 
+   (* mark_debug = "true" *) reg [31:0] _addr;
+   (* mark_debug = "true" *) reg [31:0] _data;   
+   (* mark_debug = "true" *) reg [3:0]  _wstrb;   
    
    // mmio interface
    ///////////////////////
@@ -99,7 +102,12 @@ module virtio(
          queue_ready <= 32'b0;
          queue_notify <= 32'b0;
          interrupt_ack <= 32'b0;
-         device_status <= 32'b0;                                 
+         device_status <= 32'b0;
+         
+         // axi backup
+         _addr <= 32'b0;
+         _data <= 32'b0;
+         _wstrb <= 4'b0;                       
 
          // axi interface
 		 core_arready <= 1'b1;
@@ -120,7 +128,7 @@ module virtio(
       end
    endtask
 
-   function read_reg(input [31:0] addr);
+   function [31:0] read_reg(input [31:0] addr);
       begin
          case(addr)
            32'h00: read_reg = magic_value;
@@ -129,7 +137,7 @@ module virtio(
            32'h0c: read_reg = vendor_id;
            32'h10: read_reg = host_features;
            32'h14: read_reg = host_features_sel;
-           32'h35: read_reg = queue_num_max;           
+           32'h34: read_reg = queue_num_max;           
            32'h40: read_reg = queue_pfn;
            32'h70: read_reg = device_status;           
          endcase            
@@ -153,10 +161,6 @@ module virtio(
          endcase
       end
    endtask
-
-   (* mark_debug = "true" *) reg [31:0] _addr;
-   (* mark_debug = "true" *) reg [31:0] _data;   
-   (* mark_debug = "true" *) reg [3:0]  _wstrb;   
    
    always @(posedge clk) begin
 	  if(rstn) begin
@@ -187,7 +191,6 @@ module virtio(
          end
          
          if (!core_awready && !core_wready) begin
-            interface_state <= WAITING_BREADY;
             write_reg(_addr, _data);
             // NOTE: is it okay?
             controller_notified <= (_addr == 32'h50);
@@ -265,7 +268,7 @@ module virtio(
             desc.addr[63:32] <= 32'b0;
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;                  
-            mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 4;
+            mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 0;
          end else if (load_desc_microstate == 1) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 2;
@@ -289,8 +292,9 @@ module virtio(
          end else if (load_desc_microstate == 3) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 0;
-               desc.flags <= mem_data[31:16];
-               desc.next <= mem_data[15:0];               
+               // note: memory is little endian!
+               desc.flags <= mem_data[15:0];
+               desc.next <= mem_data[31:16];               
                controller_state <= cstate_base.next(callback_state);               
             end else begin
                mem_request_enable <= 0;            
@@ -344,9 +348,11 @@ module virtio(
    // actual disk control
    (* mark_debug = "true" *) enum reg [3:0] {
                                              CDISK_INIT, 
-                                             CDISK_R_DISK, 
-                                             CDISK_R_MEM, 
-                                             CDISK_W_DISK, 
+                                             CDISK_R_DISK,
+                                             CDISK_R_DISK_STARTUP, 
+                                             CDISK_R_MEM,
+                                             CDISK_R_MEM_STARTUP,
+                                             CDISK_W_DISK,
                                              CDISK_W_MEM
                                              } cdisk_microstate;   
    (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
@@ -397,7 +403,7 @@ module virtio(
                      controller_state <= WRITE_STATUS;
                   end else begin
                      wrote_size <= wrote_size + 32'd512;                     
-                     controller_state <= CDISK_R_DISK_STARTUP;
+                     cdisk_microstate <= CDISK_R_DISK_STARTUP;
                      outhdr.sector <= outhdr.sector + 1;                     
                      buffer_addr <= buffer_addr + 32'd512;                     
                   end
@@ -407,7 +413,7 @@ module virtio(
                   mem_mode <= MEMREQ_WRITE;
                   mem_wdata <= cdisk_buf[cdisk_loop_index + 1];
                   mem_wstrb <= 4'b1111;
-                  mem_addr <= bufer_addr + 4 * (cdisk_loop_index+1);
+                  mem_addr <= buffer_addr + 4 * (cdisk_loop_index+1);
                end                  
             end else begin
                disk_request_enable <= 1'b0;                           
@@ -460,7 +466,7 @@ module virtio(
                      controller_state <= WRITE_STATUS;                     
                   end else begin
                      wrote_size <= wrote_size + 32'd512;                     
-                     controller_state <= CDISK_R_MEM_STARTUP;
+                     cdisk_microstate <= CDISK_R_MEM_STARTUP;
                      outhdr.sector <= outhdr.sector + 1;                     
                      buffer_addr <= buffer_addr + 32'd512;                     
                   end
@@ -603,8 +609,8 @@ module virtio(
                   
          buffer_addr <= 32'b0;
          buffer_len <= 32'b0;         
-         status_addr <= 32'b0;
-
+         status_addr <= 32'b0; 
+         
          // buf
          init_cdisk_buf();         
 
@@ -643,8 +649,9 @@ module virtio(
             controller_state <= WAITING_MEM_AVAIL_IDX;            
          end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
             if (mem_response_enable) begin
-               avail_idx <= mem_data[15:0];
-               if (used_idx != mem_data[15:0]) begin
+               // TODO: check for unaligned mem access
+               avail_idx <= mem_data[31:16];
+               if (used_idx != mem_data[31:16]) begin
                   used_idx <= used_idx + 1;
                   controller_state <= LOAD_FIRST_INDEX;
 
@@ -660,7 +667,8 @@ module virtio(
          end else if (controller_state == LOAD_FIRST_INDEX) begin
             mem_request_enable <= 0;
             if (mem_response_enable) begin
-               first_idx <= mem_data[15:0];
+               // TODO: check for unaligned mem access            
+               first_idx <= mem_data[31:16];
                controller_state <= LOAD_FIRST_DESC;
             end
          end else if (controller_state == LOAD_FIRST_DESC) begin
