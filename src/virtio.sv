@@ -377,14 +377,12 @@ module virtio(
    task spi_command();
       begin
          spi_phase <= spi_phase + 8'h1;
-         if(spi_phase == 8'hfa) begin
+         if(spi_phase == 8'hf9) begin
             m_spi_awaddr <= 32'h60;
             m_spi_wdata <= 32'h1e6;
-            spi_phase <= 8'hff;
-         end else if(spi_phase == 8'hfb) begin
+         end else if(spi_phase == 8'hfa || spi_phase == 8'hfb) begin
             m_spi_awaddr <= 32'h70;
             m_spi_wdata <= 32'h1;
-            spi_phase <= 8'h0;
          end else if(spi_phase == 8'hfc) begin
             m_spi_awaddr <= 32'h68;
             if(spi_mode == SPI_PREPARE) begin
@@ -409,9 +407,9 @@ module virtio(
                m_spi_wdata <= {24'h0, outhdr.sector[11:4]};
             end
          end else if(spi_phase == 8'hfe) begin
-            m_spi_wdata <= {24'h0, outhdr.sector[3:0], 4'h0};
+            m_spi_wdata <= {24'h0, outhdr.sector[3:0], spi_rep[1]};
          end else if(spi_phase == 8'hff) begin
-            m_spi_wdata <= 32'h0;
+            m_spi_wdata <= {24'h0, spi_rep[0], 7'h0};
             if(spi_mode == SPI_ERASE) begin
                spi_state <= SPI_STATE_ENABLE;
                spi_phase <= 8'h0;
@@ -421,7 +419,7 @@ module virtio(
             if(spi_phase == 8'h7f) begin
                spi_state <= SPI_STATE_ENABLE;
                spi_phase <= 8'h0;
-               spi_rep <= spi_rep + 2'h1;
+               if(spi_mode == SPI_PROGRAM) spi_rep <= spi_rep + 2'h1;
             end
          end
       end
@@ -447,7 +445,7 @@ module virtio(
             if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
                if(m_spi_rdata[2]) begin
                   m_spi_rready <= 1'b0;
-                  spi_phase <= 1'b0;
+                  spi_phase <= 8'h0;
                   if(spi_mode == SPI_WIP) begin
                      spi_state <= SPI_STATE_WIP;
                   end else if(spi_mode == SPI_READ) begin
@@ -498,21 +496,27 @@ module virtio(
                spi_mode <= SPI_WIP;
                spi_wip_state <= 2'h2;
             end else if(spi_mode == SPI_PROGRAM) begin
-               if(spi_rep == 2'h0) begin
-                  spi_mode <= SPI_WIP;
-                  spi_wip_state <= 2'h3;
-               end
+               spi_mode <= SPI_WIP;
+               spi_wip_state <= 2'h3;
             end else if(spi_mode == SPI_WIP) begin
                if(spi_wip_state == 2'h0) begin
-                  spi_mode <= SPI_PROGRAM;
+                  spi_mode <= SPI_PREPARE;
+                  spi_prepare_state <= 2'h3;
                end else if(spi_wip_state == 2'h1)begin
-                  spi_mode <= SPI_IDLE;
+                  if(spi_rep == 2'h0) begin
+                     spi_mode <= SPI_IDLE;
+                     spi_wenable <= 1'b0;
+                  end else begin
+                     spi_mode <= SPI_PREPARE;
+                     spi_prepare_state <= 2'h3;
+                  end
                   cdisk_microstate <= CDISK_INIT;
                   controller_state <= WRITE_USED;
                end
             end else if(spi_mode == SPI_READ) begin
                if(spi_rep == 2'h0) begin
                   spi_mode <= SPI_IDLE;
+                  spi_wenable <= 1'b0;
                   cdisk_microstate <= CDISK_W_MEM;
                end
             end
@@ -558,6 +562,7 @@ module virtio(
                spi_wip_state[1] <= m_spi_rdata[0];
                spi_wenable <= 1'b1;
                spi_state <= SPI_STATE_DISABLE;
+               spi_phase <= 8'h0;
             end
          end
       end
@@ -568,7 +573,7 @@ module virtio(
          if (startup) begin
             spi_mode <= SPI_PREPARE;
             spi_state <= SPI_STATE_COMMAND;   
-            spi_phase <= 8'hfa;
+            spi_phase <= 8'hf9;
             spi_rep <= 2'h0;
             spi_prepare_state <= 2'h0;
             spi_wenable <= 1'b1;
@@ -591,11 +596,11 @@ module virtio(
          if (startup) begin
             spi_mode <= SPI_PREPARE;
             spi_state <= SPI_STATE_COMMAND;   
-            spi_phase <= 8'hfa;
+            spi_phase <= 8'hf9;
             spi_rep <= 2'h0;
             spi_prepare_state <= 2'h1;
             spi_wenable <= 1'b1;
-         end else begin
+         end else if(~m_spi_bready) begin
             if(spi_state == SPI_STATE_COMMAND) begin
                spi_command();
             end else if(spi_state == SPI_STATE_ENABLE) begin
