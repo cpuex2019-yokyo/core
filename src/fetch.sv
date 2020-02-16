@@ -60,7 +60,7 @@ module fetch
             completed <= 1;
 
             state <= WAITING_REQUEST;
-            instr_raw <= data;
+            instr_raw <= to_le32(data);
          end else begin
             completed <= 0;
             request_enable <= 0;
