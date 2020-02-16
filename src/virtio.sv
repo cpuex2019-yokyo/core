@@ -371,7 +371,7 @@ module virtio(
                   cdisk_microstate <= CDISK_W_MEM;
                   write_mem(1);                  
                end else begin
-                  cdisk_buf[cdisk_loop_index] <=  to_le32(disk_data);                  
+                  cdisk_buf[cdisk_loop_index] <=  disk_data;                  
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   disk_request_enable <= 1'b1;
