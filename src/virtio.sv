@@ -282,7 +282,7 @@ module virtio(
          end else if (load_desc_microstate == 2) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 3;
-               desc.len <= mem_data;               
+               desc.len <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
                mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 12;               
@@ -292,7 +292,6 @@ module virtio(
          end else if (load_desc_microstate == 3) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 0;
-               // NOTE: endian
                desc.flags <= to_le16(mem_data[31:16]);               
                desc.next <= to_le16(mem_data[15:0]);               
                controller_state <= cstate_base.next(callback_state);               
@@ -339,7 +338,7 @@ module virtio(
                controller_state <= LOAD_SECOND_DESC;               
                outhdr.sector[63:32] <= to_le32(mem_data);               
             end else begin
-               mem_request_enable <= 0;            
+               mem_request_enable <= 0;
             end
          end
       end
@@ -436,7 +435,7 @@ module virtio(
                   write_disk(1);                  
                end else begin
                   // TODO: endian! it should not be change data endian.
-                  cdisk_buf[cdisk_loop_index]  <= mem_data;                  
+                  cdisk_buf[cdisk_loop_index] <= mem_data;                  
                   cdisk_loop_index <= cdisk_loop_index + 1;
                   
                   mem_request_enable <= 1'b1;
@@ -522,12 +521,16 @@ module virtio(
       begin
          if (wstatus_microstate == WSTATUS_INIT) begin
             wstatus_microstate <= WSTATUS_WAITING;
-            
             mem_request_enable <= 1'b1;
             mem_mode <= MEMREQ_WRITE;
             mem_wdata <= 32'b0; // TODO(linux): this seems to be correct, but I haven't seen any specs...
-            mem_wstrb <= 4'b0001;
-            mem_addr <= status_addr;            
+            case (status_addr[1:0])
+              2'b00: mem_wstrb <= 4'b1000;
+              2'b01: mem_wstrb <= 4'b0100;
+              2'b10: mem_wstrb <= 4'b0010;
+              2'b11: mem_wstrb <= 4'b0001;
+            endcase
+            mem_addr <= {status_addr[31:2], 2'b0};
          end else if (wstatus_microstate == WSTATUS_WAITING) begin
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
@@ -551,12 +554,12 @@ module virtio(
       begin
          if (notify_microstate == NOTIFY_INIT) begin
             notify_microstate <= NOTIFY_WAITING;
-            
+            // write used->id
             mem_request_enable <= 1'b1;
             mem_mode <= MEMREQ_WRITE;
-            mem_wdata <= used_idx;
-            mem_wstrb <= 4'b1111;
-            mem_addr <= used_head + 32'd2;
+            mem_wdata <= {16'b0, to_le16(used_idx)};
+            mem_wstrb <= 4'b0011;
+            mem_addr <= used_head + 32'd0; // we'd like to sh to used_head + 32'd0
          end else if (notify_microstate == NOTIFY_WAITING) begin
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
@@ -564,7 +567,7 @@ module virtio(
 
                mem_request_enable <= 1'b1;
                mem_mode <= MEMREQ_WRITE;
-               mem_wdata <= {16'b0, first_idx};               
+               mem_wdata <= to_le32({16'b0, first_idx});
                mem_wstrb <= 4'b1111;
                mem_addr <= used_head + 8 * (used_idx-1);
             end
@@ -647,14 +650,14 @@ module virtio(
          end else if (controller_state == START_TO_HANDLE) begin
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;            
-            mem_addr <= avail_head + 32'd2; 
+            mem_addr <= avail_head + 32'd0;  // we'd like to lh from avail_head + 32'd2
             
             controller_state <= WAITING_MEM_AVAIL_IDX;            
          end else if (controller_state == WAITING_MEM_AVAIL_IDX) begin
             if (mem_response_enable) begin
                // TODO: check for unaligned mem access
-               avail_idx <= to_le16(mem_data[31:16]);
-               if (used_idx != to_le16(mem_data[31:16])) begin
+               avail_idx <= to_le16(mem_data[15:0]);
+               if (used_idx != to_le16(mem_data[15:0])) begin
                   used_idx <= used_idx + 1;
                   controller_state <= LOAD_FIRST_INDEX;
 
