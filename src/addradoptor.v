@@ -1,5 +1,10 @@
 `default_nettype none
-`include "def.sv"
+
+function [31:0] to_le32(input [31:0] data);
+   begin
+      to_le32 = {data[7:0], data[15:8], data[23:16], data[31:24]};      
+   end
+endfunction
 
 module adoptor #(
                  parameter OFFSET = 0,
