@@ -6,6 +6,25 @@ typedef struct {
    reg [31:0]  rs2;
 } regvpair;
 
+typedef enum reg [1:0]      {
+                             CPU_U = 2'b00, 
+                             CPU_S = 2'b01, 
+                             CPU_RESERVED = 2'b10, 
+                             CPU_M = 2'b11
+                             } cpu_mode_t;
+
+function [31:0] to_le32(input [31:0] data);
+   begin
+      to_le32 = {data[7:0], data[15:8], data[23:16], data[31:24]};      
+   end
+endfunction
+
+function [15:0] to_le16(input [15:0] data);
+   begin
+      to_le16 = {data[7:0], data[15:8]};      
+   end
+endfunction
+    
 parameter MEMREQ_READ = 0;
 parameter MEMREQ_WRITE = 1;
 
