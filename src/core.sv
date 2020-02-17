@@ -178,11 +178,34 @@ module core
    endtask
 
    // mip: 
-   // - ext_intr from PLIC is supervisor-level external interrupt
+   // - ext_intr_m from PLIC is machine-level external interrupt
+   // - ext_intr_s from PLIC is supervisor-level external interrupt
    // - timer_intr from CLINT is machine-level timer intr
-   wire [31:0]        intr_mask = {20'b0, 4'b1000, 4'b1000, 4'b0000};
+   wire [31:0]        intr_mask = {20'b0, 4'b1010, 4'b1000, 4'b0000};
+   wire [31:0]        intr_mask_wo_ext_s = {20'b0, 4'b1000, 4'b1000, 4'b0000};
    (* mark_debug = "true" *) reg [31:0] _mip_shadow;   
-   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & intr_mask) | {20'b0, 2'b0, ext_intr, 1'b0, timer_intr, 3'b0, 4'b0};
+   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & ~intr_mask) 
+                                                 | {20'b0,
+                                                    // ext
+                                                    ext_intr_m, 
+                                                    1'b0, 
+                                                    ext_intr_s, 
+                                                    1'b0,
+                                                    // timer
+                                                    timer_intr, 
+                                                    3'b0,
+                                                    // software
+                                                    4'b0};
+   (* mark_debug = "true" *) wire [31:0]         _mip_without_ext_s = (_mip_shadow & ~intr_mask_wo_ext_s) 
+                                                 | {20'b0,
+                                                    // ext
+                                                    ext_intr_m,
+                                                    3'b0,
+                                                    // timer
+                                                    timer_intr, 
+                                                    3'b0,
+                                                    // software
+                                                    4'b0};
    wire               software_intr = |(_mip[3:0]);
    wire               software_intr_m = _mip[3];
    wire               software_intr_s = _mip[2];   
@@ -974,7 +997,12 @@ module core
             if (is_csr_valid) begin
                state <= WRITE;
 
-               write_csr(instr.imm[11:0], csr_v(csr_value));
+               // v1.10 p29: the interrupt value from the external interrupt controller shoulde be ignored during read-modify-write sequence by CSRRS or CSRRC
+               if (instr.imm[11:0] == 12'h344) begin
+                  write_csr(instr.imm[11:0], csr_v(_mip_without_ext_s));
+               end else begin
+                  write_csr(instr.imm[11:0], csr_v(csr_value));
+               end
 
                // start to write ... e -> w
                write_enabled <= 1;

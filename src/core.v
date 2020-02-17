@@ -23,7 +23,8 @@ module core_wrapper
    input wire [31:0]  mresp_data,
 
    // from PLIC
-   input wire         ext_intr,
+   input wire         ext_intr_s,
+   input wire         ext_intr_m,
 
    // from CLINT
    input wire         timer_intr,
@@ -61,7 +62,8 @@ module core_wrapper
               .mem_response_enable(mem_response_enable),
               .mresp_data(mresp_data),
       
-              .ext_intr(ext_intr),
+              .ext_intr_s(ext_intr_s),
+              .ext_intr_m(ext_intr_m),
               
               .timer_intr(timer_intr),
               .time_full(time_full),
