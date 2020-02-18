@@ -404,10 +404,10 @@ module virtio(
                spi_state <= SPI_STATE_ENABLE;
                spi_phase <= 32'h0;
             end else begin
-               m_spi_wdata <= {24'h0, outhdr.sector[11:4]};
+               m_spi_wdata <= {24'h0, outhdr.sector[14:7]};
             end
          end else if(spi_phase == 8'hfe) begin
-            m_spi_wdata <= {24'h0, outhdr.sector[3:0], 3'h0, spi_rep[1]};
+            m_spi_wdata <= {24'h0, outhdr.sector[6:0], spi_rep[1]};
          end else if(spi_phase == 8'hff) begin
             m_spi_wdata <= {24'h0, spi_rep[0], 7'h0};
             if(spi_mode == SPI_ERASE) begin
