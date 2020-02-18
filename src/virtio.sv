@@ -529,20 +529,21 @@ module virtio(
                   if(spi_rep == 2'h0) begin
                      spi_mode <= SPI_IDLE;
                      spi_wenable <= 1'b0;
+                     
+                     // write finished
+                     if (wrote_size + 32'd512 == buffer_len) begin
+                        cdisk_microstate <= CDISK_INIT;
+                        controller_state <= WRITE_STATUS;                     
+                     end else begin
+                        wrote_size <= wrote_size + 32'd512;                     
+                        cdisk_microstate <= CDISK_R_MEM_STARTUP;
+                        outhdr.sector <= outhdr.sector + 1;                     
+                        buffer_addr <= buffer_addr + 32'd512;                     
+                     end
                   end else begin
                      spi_mode <= SPI_PREPARE;
                      spi_prepare_state <= 2'h3;
-                  end
-                  // write finished
-                  if (wrote_size + 32'd512 == buffer_len) begin
-                     cdisk_microstate <= CDISK_INIT;
-                     controller_state <= WRITE_STATUS;                     
-                  end else begin
-                     wrote_size <= wrote_size + 32'd512;                     
-                     cdisk_microstate <= CDISK_R_MEM_STARTUP;
-                     outhdr.sector <= outhdr.sector + 1;                     
-                     buffer_addr <= buffer_addr + 32'd512;                     
-                  end
+                  end                  
                end
             end else if(spi_mode == SPI_READ) begin
                if(spi_rep == 2'h0) begin
