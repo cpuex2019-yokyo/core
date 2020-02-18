@@ -40,13 +40,29 @@ module virtio_wrapper(
                       input wire [31:0]  mem_data,
 
                       // bus for disk
-                      output wire         disk_request_enable,
-                      output wire         disk_mode,
-                      output wire [31:0]  disk_addr,
-                      output wire [31:0]  disk_wdata,
-                      output wire [3:0]   disk_wstrb, 
-                      input wire         disk_response_enable,
-                      input wire [31:0]  disk_data,
+                      output reg [31:0]  m_spi_araddr,
+                      input wire         m_spi_arready,
+                      output reg         m_spi_arvalid,
+                      output reg [2:0]   m_spi_arprot,
+
+                      input wire [31:0]  m_spi_rdata,
+                      output reg         m_spi_rready,
+                      input wire [1:0]   m_spi_rresp,
+                      input wire         m_spi_rvalid,
+
+                      output reg         m_spi_bready,
+                      input wire [1:0]   m_spi_bresp,
+                      input wire         m_spi_bvalid,
+
+                      output reg [31:0]  m_spi_awaddr,
+                      input wire         m_spi_awready,
+                      output reg         m_spi_awvalid,
+                      output reg [2:0]   m_spi_awprot,
+
+                      output reg [31:0]  m_spi_wdata,
+                      input wire         m_spi_wready,
+                      output reg [3:0]   m_spi_wstrb,
+                      output reg         m_spi_wvalid,
                       
                       // general
                       output wire        virtio_interrupt
@@ -88,13 +104,29 @@ module virtio_wrapper(
                   .mem_response_enable(mem_response_enable),
                   .mem_data(mem_data),
 
-                  .disk_request_enable(disk_request_enable),
-                  .disk_mode(disk_mode),
-                  .disk_addr(disk_addr),
-                  .disk_wdata(disk_wdata),
-                  .disk_wstrb(disk_wstrb),
-                  .disk_response_enable(disk_response_enable),
-                  .disk_data(disk_data),
+                  .m_spi_araddr(m_spi_araddr),
+                  .m_spi_arready(m_spi_arready),
+                  .m_spi_arvalid(m_spi_arvalid),
+                  .m_spi_arprot(m_spi_arprot),
+
+                  .m_spi_bready(m_spi_bready),
+                  .m_spi_bresp(m_spi_bresp),
+                  .m_spi_bvalid(m_spi_bvalid),
+
+                  .m_spi_rdata(m_spi_rdata),
+                  .m_spi_rready(m_spi_rready),
+                  .m_spi_rresp(m_spi_rresp),
+                  .m_spi_rvalid(m_spi_rvalid),
+
+                  .m_spi_awaddr(m_spi_awaddr),
+                  .m_spi_awready(m_spi_awready),
+                  .m_spi_awvalid(m_spi_awvalid),
+                  .m_spi_awprot(m_spi_awprot),
+
+                  .m_spi_wdata(m_spi_wdata),
+                  .m_spi_wready(m_spi_wready),
+                  .m_spi_wstrb(m_spi_wstrb),
+                  .m_spi_wvalid(m_spi_wvalid),
                   
                   .virtio_interrupt(virtio_interrupt)
                   );
