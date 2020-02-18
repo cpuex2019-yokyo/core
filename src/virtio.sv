@@ -438,7 +438,7 @@ module virtio(
                spi_phase <= 8'h0;
             end
          end else if(spi_phase < 8'h80) begin
-            m_spi_wdata <= spi_mode == SPI_PROGRAM ? {24'h0, cdisk_buf[{spi_rep, spi_phase[6:2]}][{spi_phase[1:0], 3'h0} +: 5'h8]} : 32'hff;
+            m_spi_wdata <= spi_mode == SPI_PROGRAM ? {24'h0, cdisk_buf[{spi_rep, spi_phase[6:2]}][{2'h3 - spi_phase[1:0], 3'h0} +: 5'h8]} : 32'hff;
             if(spi_phase == 8'h7f) begin
                spi_state <= SPI_STATE_ENABLE;
                spi_phase <= 8'h0;
@@ -557,14 +557,14 @@ module virtio(
          end
       end
    endtask
-
+   
    task spi_reading();
       begin
          if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
             spi_phase <= spi_phase + 8'h1;
             m_spi_arvalid <= 1'b1;
             if(spi_phase < 8'h80) begin
-               cdisk_buf[{spi_rep, spi_phase[6:2]}][{spi_phase[1:0], 3'h0} +: 5'h8] <= m_spi_rdata[7:0];
+               cdisk_buf[{spi_rep, spi_phase[6:2]}][{2'h3 - spi_phase[1:0], 3'h0} +: 5'h8] <= m_spi_rdata[7:0];
                if(spi_phase == 8'h7f) begin
                   m_spi_arvalid <= 1'b0;
                   m_spi_rready <= 1'b0;
