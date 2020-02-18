@@ -374,17 +374,17 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
    (* mark_debug = "true" *) reg [31:0]     wrote_size;      
    
-   enum reg [3:0] {
+   (* mark_debug = "true" *) enum reg [3:0] {
                    CDISK_INIT, 
                    CDISK_R_DISK, 
                    CDISK_R_MEM, 
                    CDISK_W_DISK, 
                    CDISK_W_MEM
                    } cdisk_microstate;   
-   reg [6:0]      cdisk_loop_index;
-   reg [31:0]     cdisk_buf [0:127];
+   (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
+   (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
 
-   enum reg [3:0] {
+   (* mark_debug = "true" *) enum reg [3:0] {
       SPI_IDLE,
       SPI_PREPARE,
       SPI_ERASE,
@@ -393,7 +393,7 @@ module virtio(
       SPI_READ
    } spi_mode;
 
-   enum reg [3:0] {
+   (* mark_debug = "true" *) enum reg [3:0] {
       SPI_STATE_COMMAND,
       SPI_STATE_ENABLE,
       SPI_STATE_WIP,
@@ -401,11 +401,11 @@ module virtio(
       SPI_STATE_DISABLE
    } spi_state;
 
-   reg [7:0] spi_phase;
-   reg [1:0] spi_rep;
-   reg [1:0] spi_prepare_state;
-   reg [1:0] spi_wip_state;
-   reg spi_wenable;
+   (* mark_debug = "true" *) reg [7:0] spi_phase;
+   (* mark_debug = "true" *) reg [1:0] spi_rep;
+   (* mark_debug = "true" *) reg [1:0] spi_prepare_state;
+   (* mark_debug = "true" *) reg [1:0] spi_wip_state;
+   (* mark_debug = "true" *) reg spi_wenable;
 
    task spi_command();
       begin
@@ -543,7 +543,7 @@ module virtio(
                      // write finished
                      if (wrote_size + 32'd512 == buffer_len) begin
                         cdisk_microstate <= CDISK_INIT;
-                        controller_state <= WRITE_STATUS;                     
+                        controller_state <= WRITE_STATUS;    
                      end else begin
                         wrote_size <= wrote_size + 32'd512;                     
                         cdisk_microstate <= CDISK_R_MEM_STARTUP;
@@ -561,6 +561,7 @@ module virtio(
                   spi_mode <= SPI_IDLE;
                   spi_wenable <= 1'b0;
                   cdisk_microstate <= CDISK_W_MEM;
+                  write_mem(1);                  
                end
             end
          end
