@@ -40,29 +40,29 @@ module virtio_wrapper(
                       input wire [31:0]  mem_data,
 
                       // bus for disk
-                      output reg [31:0]  m_spi_araddr,
+                      output wire [31:0]  m_spi_araddr,
                       input wire         m_spi_arready,
-                      output reg         m_spi_arvalid,
-                      output reg [2:0]   m_spi_arprot,
+                      output wire         m_spi_arvalid,
+                      output wire [2:0]   m_spi_arprot,
 
                       input wire [31:0]  m_spi_rdata,
-                      output reg         m_spi_rready,
+                      output wire         m_spi_rready,
                       input wire [1:0]   m_spi_rresp,
                       input wire         m_spi_rvalid,
 
-                      output reg         m_spi_bready,
+                      output wire         m_spi_bready,
                       input wire [1:0]   m_spi_bresp,
                       input wire         m_spi_bvalid,
 
-                      output reg [31:0]  m_spi_awaddr,
+                      output wire [31:0]  m_spi_awaddr,
                       input wire         m_spi_awready,
-                      output reg         m_spi_awvalid,
-                      output reg [2:0]   m_spi_awprot,
+                      output wire         m_spi_awvalid,
+                      output wire [2:0]   m_spi_awprot,
 
-                      output reg [31:0]  m_spi_wdata,
+                      output wire [31:0]  m_spi_wdata,
                       input wire         m_spi_wready,
-                      output reg [3:0]   m_spi_wstrb,
-                      output reg         m_spi_wvalid,
+                      output wire [3:0]   m_spi_wstrb,
+                      output wire         m_spi_wvalid,
                       
                       // general
                       output wire        virtio_interrupt

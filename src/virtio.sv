@@ -373,16 +373,6 @@ module virtio(
    (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
    (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
    (* mark_debug = "true" *) reg [31:0]     wrote_size;      
-   
-   enum reg [3:0] {
-                   CDISK_INIT, 
-                   CDISK_R_DISK, 
-                   CDISK_R_MEM, 
-                   CDISK_W_DISK, 
-                   CDISK_W_MEM
-                   } cdisk_microstate;   
-   reg [6:0]      cdisk_loop_index;
-   reg [31:0]     cdisk_buf [0:127];
 
    enum reg [3:0] {
       SPI_IDLE,
