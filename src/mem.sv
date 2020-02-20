@@ -27,7 +27,11 @@ module mem(
 
            // output
            output reg [31:0] result,
-           output reg flush_tlb);
+           output reg flush_tlb,
+
+           output reg [4:0]  exception_vec,
+           output reg [31:0] exception_tval,
+           output reg        exception_enable);
 
 
    localparam WAITING_REQUEST = 0;
@@ -42,11 +46,30 @@ module mem(
          wdata <= 0;
          wstrb <= 0;
          
+         exception_vec <= 5'b0;
+         exception_tval <= 32'b0;
+         exception_enable <= 1'b0;
+         
          completed <= 0;
          state <= WAITING_REQUEST;
       end
    endtask
 
+   task raise_misaligned_exception;      
+      begin
+         exception_enable <= 1'b1;         
+         exception_vec <= instr.is_load? 5'd4: // load address misaligned
+                          5'd6; // store/amo misaligned
+         exception_tval <= _vaddr;         
+      end
+   endtask
+
+   function [0:0] is_addr_misaligned(input [31:0] addr, input [2:0] width);
+      begin
+         is_addr_misaligned = (width == 3'd4 && addr[1:0] != 2'b0) || (width == 3'd2 && addr[0:0] != 1'b0);         
+      end
+   endfunction
+   
    initial begin
       init();
    end
@@ -55,7 +78,7 @@ module mem(
    wire [31:0] _addr = (is_a_write|is_a_read)? register.rs1 : arg;
    always @(posedge clk) begin
       if(rstn) begin
-         if (state == WAITING_REQUEST && enabled) begin
+         if (state == WAITING_REQUEST && enabled) begin            
             if (instr.sfence_vma) begin
                completed <= 0;
                flush_tlb <= 1;
@@ -64,61 +87,73 @@ module mem(
                mode <= MEMREQ_READ;
                addr <= 32'b0;
                request_enable <= 1;
-            end else if (instr.is_load || is_a_read) begin
-               completed <= 0;
-
-               state <= WAITING_DONE;
-               mode <= MEMREQ_READ;
-               addr <= {_addr[31:2], 2'b0};
-               request_enable <= 1;
-            end else if (instr.is_store || is_a_write) begin
-               completed <= 0;
-
-               state <= WAITING_DONE;
-               mode <= MEMREQ_WRITE;
-               addr <= {_addr[31:2], 2'b0};
-               if(instr.sb) begin
-                  case(_addr[1:0])
-                    2'b00 : begin
-                       wstrb <= 4'b1000;
-                       wdata <= {register.rs2[7:0], 24'b0};
-                    end
-                    2'b01 : begin
-                       wstrb <= 4'b0100;
-                       wdata <= {8'b0, register.rs2[7:0], 16'b0};
-                    end
-                    2'b10 : begin
-                       wstrb <= 4'b0010;
-                       wdata <= {16'b0, register.rs2[7:0], 8'b0};
-                    end
-                    2'b11 : begin
-                       wstrb <= 4'b0001;
-                       wdata <= {24'b0, register.rs2[7:0]};
-                    end
-                  endcase
-               end else if (instr.sh) begin
-                  case(_addr[1:0])
-                    2'b00 : begin
-                       wstrb <= 4'b1100;
-                       wdata <= {to_le16(register.rs2[15:0]), 16'b0};
-                    end
-                    2'b10 : begin
-                       wstrb <= 4'b0011;
-                       wdata <= {16'b0, to_le16(register.rs2[15:0])};
-                    end
-                  endcase
-               end  else if (instr.sw) begin
-                  wstrb <= 4'b1111;
-                  wdata <= to_le32(register.rs2);
-               end else if (is_a_write) begin
-                  wstrb <= 4'b1111;
-                  wdata <= to_le32(arg);
-               end
-               request_enable <= 1;               
+            end else if (is_addr_misaligned(_addr, 
+                                            (instr.lw | instr.sw | is_a_read | is_a_write) ? 3'd4:
+                                            (instr.lh | instr.lhu | instr.sh) ? 3'd2:
+                                            3'd1)) begin
+               raise_misaligned_exception();
+               completed <= 1'b1;                
             end else begin
-               // including sfence.vma
-               result <= arg;
-               completed <= 1;
+               exception_tval <= 32'b0;              
+               exception_vec <= 5'b0;
+               exception_enable <= 1'b0;
+
+               if (instr.is_load || is_a_read) begin
+                  completed <= 0;
+
+                  state <= WAITING_DONE;
+                  mode <= MEMREQ_READ;
+                  addr <= {_addr[31:2], 2'b0};
+                  request_enable <= 1;
+               end else if (instr.is_store || is_a_write) begin
+                  completed <= 0;
+
+                  state <= WAITING_DONE;
+                  mode <= MEMREQ_WRITE;
+                  addr <= {_addr[31:2], 2'b0};
+                  if(instr.sb) begin
+                     case(_addr[1:0])
+                       2'b00 : begin
+                          wstrb <= 4'b1000;
+                          wdata <= {register.rs2[7:0], 24'b0};
+                       end
+                       2'b01 : begin
+                          wstrb <= 4'b0100;
+                          wdata <= {8'b0, register.rs2[7:0], 16'b0};
+                       end
+                       2'b10 : begin
+                          wstrb <= 4'b0010;
+                          wdata <= {16'b0, register.rs2[7:0], 8'b0};
+                       end
+                       2'b11 : begin
+                          wstrb <= 4'b0001;
+                          wdata <= {24'b0, register.rs2[7:0]};
+                       end
+                     endcase
+                  end else if (instr.sh) begin
+                     case(_addr[1:0])
+                       2'b00 : begin
+                          wstrb <= 4'b1100;
+                          wdata <= {to_le16(register.rs2[15:0]), 16'b0};
+                       end
+                       2'b10 : begin
+                          wstrb <= 4'b0011;
+                          wdata <= {16'b0, to_le16(register.rs2[15:0])};
+                       end
+                     endcase
+                  end  else if (instr.sw) begin
+                     wstrb <= 4'b1111;
+                     wdata <= to_le32(register.rs2);
+                  end else if (is_a_write) begin
+                     wstrb <= 4'b1111;
+                     wdata <= to_le32(arg);
+                  end
+                  request_enable <= 1;               
+               end else begin
+                  // not a memory operation
+                  result <= arg;
+                  completed <= 1;
+               end
             end
          end else if (state == WAITING_DONE && response_enable) begin
             completed <= 1;

@@ -38,9 +38,9 @@ module core
    output wire        flush_tlb,
 
    // from MMU
-   input wire [4:0]   mem_exception_vec,
-   input wire         mem_exception_enable,
-   input wire [31:0]  mem_exception_tval
+   input wire [4:0]   mmu_exception_vec,
+   input wire         mmu_exception_enable,
+   input wire [31:0]  mmu_exception_tval
    );
 
    // internal state
@@ -544,6 +544,10 @@ module core
    wire                is_a_read = (state == EXEC_ATOM1);
    wire                is_a_write = (state == EXEC_ATOM2);
 
+   wire [4:0]          exception_vec;   
+   wire [31:0]         exception_tval;      
+   wire                exception_enable;
+   
    mem _mem(.clk(clk),
             .rstn(rstn),
 
@@ -558,6 +562,10 @@ module core
             .response_enable(mem_response_enable),
             .data(mresp_data),
 
+            .exception_vec(mem_exception_vec),
+            .exception_tval(mem_exception_tval),
+            .exception_enable(mem_exception_enable),
+            
             .instr(instr),
             .register(register),
 
@@ -567,6 +575,8 @@ module core
 
             .result(mem_result),
             .flush_tlb(flush_tlb));
+
+
 
    // write stage
    /////////
@@ -901,12 +911,13 @@ module core
             state <= FETCH;
             fetch_enabled <= 1;
          end else if (state == FETCH && is_fetch_done) begin
-            _mcycle_full <= _mcycle_full + 1;            
+            _mcycle_full <= _mcycle_full + 1;
             
-            if (mem_exception_enable) begin
+            // TODO: mem_exception_enable
+            if (mmu_exception_enable) begin
                state <= TRAP;               
-               exception_number <= mem_exception_vec;
-               exception_tval <= mem_exception_tval; 
+               exception_number <= mmu_exception_vec;
+               exception_tval <= mmu_exception_tval; 
             end else if (instr_raw == 32'b0) begin // TODO: cover more exception
                raise_illegal_instruction(instr_raw);
                state <= TRAP;
@@ -1018,11 +1029,15 @@ module core
                mem_arg <= exec_result;   
             end                        
          end else if (state == MEM && is_mem_done) begin
-            mem_enabled <= 0;    
+            mem_enabled <= 0;
             if (mem_exception_enable) begin
                state <= TRAP;               
                exception_number <= mem_exception_vec;
-               exception_tval <= mem_exception_tval;               
+               exception_tval <= mem_exception_tval;                              
+            end else if (mmu_exception_enable) begin
+               state <= TRAP;               
+               exception_number <= mmu_exception_vec;
+               exception_tval <= mmu_exception_tval;               
             end else begin
                state <= WRITE;
                // start to write ... m -> w

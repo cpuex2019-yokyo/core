@@ -37,9 +37,9 @@ module core_wrapper
    output wire        flush_tlb,
 
    // from MMU
-   input wire [4:0]   mem_exception_vec,
-   input wire         mem_exception_enable,
-   input wire [31:0]  mem_exception_tval   
+   input wire [4:0]   mmu_exception_vec,
+   input wire         mmu_exception_enable,
+   input wire [31:0]  mmu_exception_tval   
    );   
 
    core _core(.clk(clk),
@@ -72,9 +72,9 @@ module core_wrapper
               .o_sum(o_sum),
               .flush_tlb(flush_tlb),
 
-              .mem_exception_vec(mem_exception_vec),              
-              .mem_exception_enable(mem_exception_enable),
-              .mem_exception_tval(mem_exception_tval));   
+              .mmu_exception_vec(mmu_exception_vec),              
+              .mmu_exception_enable(mmu_exception_enable),
+              .mmu_exception_tval(mmu_exception_tval));   
    
 endmodule
 
