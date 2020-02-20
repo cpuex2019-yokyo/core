@@ -957,7 +957,7 @@ module core
                        instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
                                       mem_result):
                        instr.amomaxu? (mem_result > register.rs2? mem_result:
-                                       mem_result):
+                                       register.rs2):
                        instr.amominu? (mem_result > register.rs2? register.rs2:
                                        mem_result):
                        0;
