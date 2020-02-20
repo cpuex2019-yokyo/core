@@ -601,7 +601,7 @@ module core
    /////////////////////
    task init;
       begin
-         pc <= 32'h00001000; // bootloader
+         pc <= 32'h00000000; // bootloader
          
          fetch_enabled <= 0;
          exec_enabled <= 0;

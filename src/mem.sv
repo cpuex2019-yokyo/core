@@ -27,7 +27,7 @@ module mem(
 
            // output
            output reg [31:0] result,
-           output reg [31:0] flush_tlb);
+           output reg flush_tlb);
 
 
    localparam WAITING_REQUEST = 0;
