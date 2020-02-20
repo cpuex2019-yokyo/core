@@ -177,21 +177,17 @@ module core
       end
    endtask
 
-   // mip: 
-   // - ext_intr from PLIC is supervisor-level external interrupt
-   // - timer_intr from CLINT is machine-level timer intr
    wire [31:0]        intr_mask = {20'b0, 4'b1000, 4'b1000, 4'b0000};
    (* mark_debug = "true" *) reg [31:0] _mip_shadow;   
-   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & intr_mask) | {20'b0, 2'b0, ext_intr, 1'b0, timer_intr, 3'b0, 4'b0};
-   wire               software_intr = |(_mip[3:0]);
-   wire               software_intr_m = _mip[3];
-   wire               software_intr_s = _mip[2];   
+   (* mark_debug = "true" *) wire [31:0]         _mip = (_mip_shadow & ~intr_mask) | {20'b0, 
+                                                                                      2'b0, ext_intr, 1'b0, 
+                                                                                      timer_intr, 3'b0, 
+                                                                                      4'b0};
    task write_mip (input [31:0] value);
       begin
          _mip_shadow <= value;                       
       end
-   endtask
-   
+   endtask   
    
    (* mark_debug = "true" *) reg [31:0]         _mie;
    wire [31:0]        all_ints = 32'haaa;   
@@ -344,7 +340,7 @@ module core
    
    wire [31:0]         _sip = _mip & _mideleg;
    // This mask is for SSIP, USIP, and UEIP.
-   wire [31:0]         sip_writable_mask = 32'b100000011;   
+   wire [31:0]         sip_writable_mask = {20'b0, 4'b0000, 4'b0000, 4'b0010};   
    task write_sip (input [31:0] value);
       begin
          write_mip(value & _mideleg & sip_writable_mask);         
@@ -633,7 +629,8 @@ module core
          _mepc <= 32'b0;         
          _mcause <= 32'b0;         
          _mtval <= 32'b0;         
-         _mip_shadow <= 32'b0;         
+         _mip_shadow <= 32'b0;    
+         _minstret_full <= 64'h0;     
          _pmpcfg <= 128'b0;         
          _pmpaddr[0] <= 32'b0;         
          _pmpaddr[1] <= 32'b0;         
