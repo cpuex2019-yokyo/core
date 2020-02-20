@@ -402,20 +402,20 @@ module core
 
    wire [1:0]          next_cpu_mode_when_interrupted =
                        (_mip[11] && _mie[11])? (_mideleg[11]? CPU_S : CPU_M):
-                       (_mip[9] && _mie[9])? CPU_S:
                        (_mip[3] && _mie[3])? (_mideleg[3]? CPU_S : CPU_M):
-                       (_mip[1] && _mie[1])? CPU_S:
                        (_mip[7] && _mie[7])? (_mideleg[7]? CPU_S : CPU_M):
+                       (_mip[9] && _mie[9])? CPU_S:
+                       (_mip[1] && _mie[1])? CPU_S:
                        (_mip[5] && _mie[5])? CPU_S:
                        cpu_mode;   
    
    wire [31:0]         exception_vec_when_interrupted =
                        (_mip[11] && _mie[11])? (_mideleg[11]? 32'd9 : 32'd11):
-                       (_mip[9] && _mie[9])? 32'd9:
                        (_mip[3] && _mie[3])? (_mideleg[3]? 32'd1 : 32'd3):
+                       (_mip[7] && _mie[7])? (_mideleg[7]? 32'd5 : 32'd7):
+                       (_mip[9] && _mie[9])? 32'd9:
                        (_mip[1] && _mie[1])? 32'd1:
-                       (_mip[7] && _mie[7])? (_mideleg[7]? 32'd4 : 32'd7):
-                       (_mip[5] && _mie[5])? 32'd4:
+                       (_mip[5] && _mie[5])? 32'd5:
                        32'd0;
    
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
