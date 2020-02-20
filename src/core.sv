@@ -173,7 +173,7 @@ module core
    wire [31:0]        delegable_ints = 32'h222;   
    task write_mideleg (input [31:0] value);
       begin
-         _mideleg <= (_mideleg & delegable_ints) | (value & delegable_ints);         
+         _mideleg <= (_mideleg & ~delegable_ints) | (value & delegable_ints);         
       end
    endtask
 
@@ -197,7 +197,7 @@ module core
    wire [31:0]        all_ints = 32'haaa;   
    task write_mie (input [31:0] value);
       begin
-         _mie <= (_mie & all_ints) | (value & all_ints);         
+         _mie <= (_mie & ~all_ints) | (value & all_ints);         
       end
    endtask
    
