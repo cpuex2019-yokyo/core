@@ -931,7 +931,7 @@ module core
                state <= DECODE;
             end
          end else if (state == DECODE && is_decode_done) begin
-            if (decode_suceeded) begin
+            if (decode_succeeded) begin
                instr <= instr_d_out;
                register <= register_d_out;
                
