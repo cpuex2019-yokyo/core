@@ -948,13 +948,16 @@ module core
                         mem_arg <= register_d_out.rs2; // data to write
                      end else begin
                         // if not, do nothing.
+                        write_enabled <= 1;                        
                         state <= WRITE;                        
                      end
                   end else if (instr_d_out.lr) begin 
                      // lr: load reserved
                      // reserve address
-                     reserved_addr <= register_d_out.rs1;
                      mem_enabled <= 1;          
+                     state <= MEM;
+                     reserved_addr <= register_d_out.rs1;
+                     // here we do not have to care about load addr. it's register_d_out.rs1
                   end else begin
                      // amo*: atomic hoge and foobar.
                      //                      
@@ -965,8 +968,8 @@ module core
                      // sw tmp, (rs1)
                      
                      // start to load (rs1) ... d -> m                     
-                     state <= EXEC_ATOM1;
                      mem_enabled <= 1;          
+                     state <= EXEC_ATOM1;
                   end
                end else begin
                   state <= TRAP;               
