@@ -151,13 +151,15 @@ module decoder
    /////////
    wire              _is_store = (_sb
                                   || _sh
-                                  || _sw);
+                                  || _sw
+                                  || _sc);
 
    wire              _is_load = (_lb
                                  || _lh
                                  || _lw
                                  || _lbu
-                                 || _lhu);
+                                 || _lhu
+                                 || _lr);
 
    wire              _is_conditional_jump = (_beq
                                              || _bne
@@ -167,6 +169,7 @@ module decoder
                                              || _bgeu);
 
    wire              _rv32a = (_sc
+                               || _lr
                                || _amoswap
                                || _amoadd
                                || _amoxor
