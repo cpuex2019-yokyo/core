@@ -27,7 +27,7 @@ module mem(
 
            // output
            output reg [31:0] result,
-           output reg flush_tlb,
+           output reg        flush_tlb,
 
            output reg [4:0]  exception_vec,
            output reg [31:0] exception_tval,
@@ -45,6 +45,8 @@ module mem(
          addr <= 0;
          wdata <= 0;
          wstrb <= 0;
+         
+         flush_tlb <= 1'b0;
          
          exception_vec <= 5'b0;
          exception_tval <= 32'b0;
@@ -81,8 +83,9 @@ module mem(
          if (state == WAITING_REQUEST && enabled) begin            
             if (instr.sfence_vma) begin
                completed <= 0;
-               flush_tlb <= 1;
+               flush_tlb <= 1'b1;
                state <= WAITING_DONE;
+               
                // dummy
                mode <= MEMREQ_READ;
                addr <= 32'b0;
@@ -160,7 +163,9 @@ module mem(
             state <= WAITING_REQUEST;
             if (instr.sfence_vma) begin
                flush_tlb <= 1'b0;
-            end if (instr.lb) begin
+            end
+
+            if (instr.lb) begin
                case(_addr[1:0])
                  2'b00: result <= {{24{data[31]}}, data[31:24]};
                  2'b01: result <= {{24{data[23]}}, data[23:16]};
@@ -196,6 +201,7 @@ module mem(
                result <= 32'b0;
             end
          end else begin
+            // just waiting now...
             flush_tlb <= 1'b0;
             request_enable <= 0;
             completed <= 0;
