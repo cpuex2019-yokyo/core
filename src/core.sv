@@ -948,7 +948,8 @@ module core
                         mem_arg <= register_d_out.rs2; // data to write
                      end else begin
                         // if not, do nothing.
-                        write_enabled <= 1;                        
+                        write_enabled <= 1;
+                        data_to_write <= 32'b1;
                         state <= WRITE;                        
                      end
                   end else if (instr_d_out.lr) begin 

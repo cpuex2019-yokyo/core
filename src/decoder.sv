@@ -301,7 +301,7 @@ module decoder
             instr.rv32a <= _rv32a;
             
             instr.writes_to_reg <= !(_is_conditional_jump
-                                     || _is_store
+                                     || (_is_store && !_sc)
                                      // rv32i others
                                      || _fence
                                      || _fencei

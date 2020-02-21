@@ -167,8 +167,10 @@ module mem(
             if (instr.sfence_vma) begin
                flush_tlb <= 1'b0;
             end
-
-            if (instr.lb) begin
+            
+            if (instr.sc) begin
+               result <= 32'b0;               
+            end else if (instr.lb) begin
                case(_addr[1:0])
                  2'b00: result <= {{24{data[31]}}, data[31:24]};
                  2'b01: result <= {{24{data[23]}}, data[23:16]};
