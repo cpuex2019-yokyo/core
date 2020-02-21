@@ -65,7 +65,8 @@ module core
                                                   } state;
    const cpu_mode_t cpu_mode_base = CPU_U;
 
-   (* mark_debug = "true" *) reg [31:0] reserved_addr;   
+   (* mark_debug = "true" *) reg [31:0] reserved_addr;
+   (* mark_debug = "true" *) reg reserved_valid;     
    
    task init_stage_states;
       begin
@@ -618,7 +619,8 @@ module core
 
          state <= INIT;         
          cpu_mode <= CPU_M;
-         reserved_addr <= 32'b0;         
+         reserved_addr <= 32'b0;
+         reserved_valid <= 1'b0;         
          is_csr_valid <= 1'b0;
          
          exception_number <= 5'b0;
@@ -941,10 +943,11 @@ module core
                if (register_d_out.rs1[1:0] == 2'b0) begin // if aligned
                   if (instr_d_out.sc) begin
                      // sc: store conditional
-                     if (reserved_addr == register_d_out.rs1) begin
+                     if (reserved_addr == register_d_out.rs1 && reserved_valid) begin
                         // if reserved, go.
                         mem_enabled <= 1;
                         state <= MEM;
+                        reserved_valid <= 1'b0;                        
                         mem_arg <= register_d_out.rs2; // data to write
                      end else begin
                         // if not, do nothing.
@@ -958,6 +961,7 @@ module core
                      mem_enabled <= 1;          
                      state <= MEM;
                      reserved_addr <= register_d_out.rs1;
+                     reserved_valid <= 1'b1;                     
                      // here we do not have to care about load addr. it's register_d_out.rs1
                   end else begin
                      // amo*: atomic hoge and foobar.
