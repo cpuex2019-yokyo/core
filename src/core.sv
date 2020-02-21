@@ -485,9 +485,9 @@ module core
 
    // stage input
    // none
-
+   
    // stage outputs
-   // defined above
+   wire decode_suceeded;   
 
    wire [4:0]          rs1_a;
    wire [4:0]          rs2_a;
@@ -496,6 +496,7 @@ module core
 
                     .enabled(is_fetch_done),
                     .completed(is_decode_done),
+                    .suceeded(decode_succeeded),
 
                     .pc(pc),
                     .instr_raw(instr_raw),
@@ -930,59 +931,65 @@ module core
                state <= DECODE;
             end
          end else if (state == DECODE && is_decode_done) begin
-            instr <= instr_d_out;
-            register <= register_d_out;
-            
-            // reset previous results ... d -> e
-            exec_enabled <= 1;    
-            
-            if (instr_d_out.csrop) begin
-               state <= EXEC_PRIV;           
-               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);
-            end else if (instr_d_out.rv32a) begin
-               if (register_d_out.rs1[1:0] == 2'b0) begin // if aligned
-                  if (instr_d_out.sc) begin
-                     // sc: store conditional
-                     if (reserved_addr == register_d_out.rs1 && reserved_valid) begin
-                        // if reserved, go.
-                        mem_enabled <= 1;
+            if (decode_suceeded) begin
+               instr <= instr_d_out;
+               register <= register_d_out;
+               
+               // reset previous results ... d -> e
+               exec_enabled <= 1;    
+               
+               if (instr_d_out.csrop) begin
+                  state <= EXEC_PRIV;           
+                  {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);
+               end else if (instr_d_out.rv32a) begin
+                  if (register_d_out.rs1[1:0] == 2'b0) begin // if aligned
+                     if (instr_d_out.sc) begin
+                        // sc: store conditional
+                        if (reserved_addr == register_d_out.rs1 && reserved_valid) begin
+                           // if reserved, go.
+                           mem_enabled <= 1;
+                           state <= MEM;
+                           reserved_valid <= 1'b0;                        
+                           mem_arg <= register_d_out.rs2; // data to write
+                        end else begin
+                           // if not, do nothing.
+                           write_enabled <= 1;
+                           data_to_write <= 32'b1;
+                           state <= WRITE;                        
+                        end
+                     end else if (instr_d_out.lr) begin 
+                        // lr: load reserved
+                        // reserve address
+                        mem_enabled <= 1;          
                         state <= MEM;
-                        reserved_valid <= 1'b0;                        
-                        mem_arg <= register_d_out.rs2; // data to write
+                        reserved_addr <= register_d_out.rs1;
+                        reserved_valid <= 1'b1;                     
+                        // here we do not have to care about load addr. it's register_d_out.rs1
                      end else begin
-                        // if not, do nothing.
-                        write_enabled <= 1;
-                        data_to_write <= 32'b1;
-                        state <= WRITE;                        
+                        // amo*: atomic hoge and foobar.
+                        //                      
+                        // NOTE:
+                        // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
+                        // lw rd, (rs1)
+                        // op tmp, rs2, rd
+                        // sw tmp, (rs1)
+                        
+                        // start to load (rs1) ... d -> m                     
+                        mem_enabled <= 1;          
+                        state <= EXEC_ATOM1;
                      end
-                  end else if (instr_d_out.lr) begin 
-                     // lr: load reserved
-                     // reserve address
-                     mem_enabled <= 1;          
-                     state <= MEM;
-                     reserved_addr <= register_d_out.rs1;
-                     reserved_valid <= 1'b1;                     
-                     // here we do not have to care about load addr. it's register_d_out.rs1
                   end else begin
-                     // amo*: atomic hoge and foobar.
-                     //                      
-                     // NOTE:
-                     // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
-                     // lw rd, (rs1)
-                     // op tmp, rs2, rd
-                     // sw tmp, (rs1)
-                     
-                     // start to load (rs1) ... d -> m                     
-                     mem_enabled <= 1;          
-                     state <= EXEC_ATOM1;
+                     state <= TRAP;               
+                     exception_number <= 32'd6;                 
+                     exception_tval <= register_d_out.rs1[1:0];                  
                   end
                end else begin
-                  state <= TRAP;               
-                  exception_number <= 32'd6;                 
-                  exception_tval <= register_d_out.rs1[1:0];                  
+                  state <= EXEC;
                end
             end else begin
-               state <= EXEC;
+               // if failed to decode instr_raw 
+               state <= TRAP;
+               raise_illegal_instruction(instr_raw);               
             end
          end else if (state == EXEC_ATOM1 && is_mem_done) begin   
             exec_enabled <= 0;         
