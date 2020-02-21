@@ -55,12 +55,12 @@ module mem(
       end
    endtask
 
-   task raise_misaligned_exception;      
+   task raise_misaligned_exception(input [31:0] vaddr);      
       begin
          exception_enable <= 1'b1;         
          exception_vec <= instr.is_load? 5'd4: // load address misaligned
                           5'd6; // store/amo misaligned
-         exception_tval <= _vaddr;         
+         exception_tval <= vaddr;         
       end
    endtask
 
@@ -91,7 +91,7 @@ module mem(
                                             (instr.lw | instr.sw | is_a_read | is_a_write) ? 3'd4:
                                             (instr.lh | instr.lhu | instr.sh) ? 3'd2:
                                             3'd1)) begin
-               raise_misaligned_exception();
+               raise_misaligned_exception(_addr);
                completed <= 1'b1;                
             end else begin
                exception_tval <= 32'b0;              

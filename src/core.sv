@@ -544,9 +544,9 @@ module core
    wire                is_a_read = (state == EXEC_ATOM1);
    wire                is_a_write = (state == EXEC_ATOM2);
 
-   wire [4:0]          exception_vec;   
-   wire [31:0]         exception_tval;      
-   wire                exception_enable;
+   wire [4:0]          mem_exception_vec;   
+   wire [31:0]         mem_exception_tval;      
+   wire                mem_exception_enable;
    
    mem _mem(.clk(clk),
             .rstn(rstn),
