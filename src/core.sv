@@ -487,7 +487,7 @@ module core
    // none
    
    // stage outputs
-   wire decode_suceeded;   
+   wire decode_succeeded;   
 
    wire [4:0]          rs1_a;
    wire [4:0]          rs2_a;
@@ -496,7 +496,7 @@ module core
 
                     .enabled(is_fetch_done),
                     .completed(is_decode_done),
-                    .suceeded(decode_succeeded),
+                    .succeeded(decode_succeeded),
 
                     .pc(pc),
                     .instr_raw(instr_raw),
