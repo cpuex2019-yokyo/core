@@ -196,6 +196,7 @@ module mem(
                result <= 32'b0;
             end
          end else begin
+            flush_tlb <= 1'b0;
             request_enable <= 0;
             completed <= 0;
          end
