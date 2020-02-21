@@ -899,7 +899,7 @@ module core
    /////////////////////
 
    assign o_satp = _satp;
-   assign o_cpu_mode = cpu_mode;
+   assign o_cpu_mode = _mstatus[17]? _mstatus[12:11] : cpu_mode;
    assign o_mxr = _mstatus[19];
    assign o_sum = _mstatus[18];
    
