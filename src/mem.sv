@@ -23,7 +23,7 @@ module mem(
            input             regvpair register,
            input wire [31:0] arg,
            input wire        amo_read_stage,
-           input wire        a_write_stage,
+           input wire        amo_write_stage,
 
            // output
            output reg [31:0] result,
