@@ -64,6 +64,8 @@ module core
                                                   TRAP
                                                   } state;
    const cpu_mode_t cpu_mode_base = CPU_U;
+
+   (* mark_debug = "true" *) reg [31:0] reserved_addr;   
    
    task init_stage_states;
       begin
@@ -541,8 +543,8 @@ module core
    // stage outputs
    (* mark_debug = "true" *) wire [31:0]         mem_result;
 
-   wire                is_a_read = (state == EXEC_ATOM1);
-   wire                is_a_write = (state == EXEC_ATOM2);
+   wire                amo_read_stage = (state == EXEC_ATOM1);
+   wire                amo_write_stage = (state == EXEC_ATOM2);
 
    wire [4:0]          mem_exception_vec;   
    wire [31:0]         mem_exception_tval;      
@@ -570,8 +572,8 @@ module core
             .register(register),
 
             .arg(mem_arg),
-            .is_a_read(is_a_read),
-            .is_a_write(is_a_write),
+            .amo_read_stage(amo_read_stage),
+            .amo_write_stage(amo_write_stage),
 
             .result(mem_result),
             .flush_tlb(flush_tlb));
@@ -616,6 +618,7 @@ module core
 
          state <= INIT;         
          cpu_mode <= CPU_M;
+         reserved_addr <= 32'b0;         
          is_csr_valid <= 1'b0;
          
          exception_number <= 5'b0;
@@ -927,23 +930,49 @@ module core
          end else if (state == DECODE && is_decode_done) begin
             instr <= instr_d_out;
             register <= register_d_out;
+            
             // reset previous results ... d -> e
             exec_enabled <= 1;    
             
             if (instr_d_out.csrop) begin
                state <= EXEC_PRIV;           
-               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);                         
-            end else if (instr_d_out.rv32a) begin               
-               state <= EXEC_ATOM1;
-               // NOTE:
-               // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
-               // lw rd, (rs1)
-               // op tmp, rs2, rd
-               // sw tmp, (rs1)
-               
-               // start to load (rs1) ... d -> m
-               mem_enabled <= 1;          
-               mem_arg <= register_d_out.rs1; // load addr: rs1
+               {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);
+            end else if (instr_d_out.rv32a) begin
+               if (register_d_out.rs1[1:0] == 2'b0) begin // if aligned
+                  if (instr_d_out.sc) begin
+                     // sc: store conditional
+                     if (reserved_addr == register_d_out.rs1) begin
+                        // if reserved, go.
+                        mem_enabled <= 1;
+                        state <= MEM;
+                        mem_arg <= register_d_out.rs2; // data to write
+                     end else begin
+                        // if not, do nothing.
+                        state <= WRITE;                        
+                     end
+                  end else if (instr_d_out.lr) begin 
+                     // lr: load reserved
+                     // reserve address
+                     reserved_addr <= register_d_out.rs1;
+                     mem_enabled <= 1;          
+                  end else begin
+                     // amo*: atomic hoge and foobar.
+                     //                      
+                     // NOTE:
+                     // amo* rd, rs1, rs2 can be splited into ... (pseudo-code)
+                     // lw rd, (rs1)
+                     // op tmp, rs2, rd
+                     // sw tmp, (rs1)
+                     
+                     // start to load (rs1) ... d -> m                     
+                     state <= EXEC_ATOM1;
+                     mem_enabled <= 1;          
+                  end
+               end else begin
+                  state <= TRAP;               
+                  exception_number <= 32'd6;                 
+                  exception_tval <= register_d_out.rs1[1:0];                  
+               end
             end else begin
                state <= EXEC;
             end
