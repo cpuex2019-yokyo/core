@@ -45,7 +45,7 @@ module mmu_wrapper (
    mmu _mmu(.clk(clk), .rstn(rstn),
 
             .satp(satp),
-            .cpu_mode(cpu_mode),
+            .mprv_cpu_mode(mprv_cpu_mode),
             .actual_cpu_mode(actual_cpu_mode),
             .mxr(mxr),
             .sum(sum),

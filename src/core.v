@@ -68,7 +68,7 @@ module core_wrapper
               .time_full(time_full),
 
               .o_satp(o_satp),
-              .o_cpu_mode(o_cpu_mode),
+              .o_mprv_cpu_mode(o_mprv_cpu_mode),
               .o_actual_cpu_mode(o_actual_cpu_mode),
               .o_mxr(o_mxr),
               .o_sum(o_sum),
