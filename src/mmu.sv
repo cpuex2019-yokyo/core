@@ -132,6 +132,23 @@ module mmu(
             mresp_data <= resp_data;
          end
       end
+   endtask // raise_pagefault_exception
+
+   task raise_accessfault_exception;
+      begin
+         exception_enable <= 1'b1;
+         exception_vec <= _mode == MEMREQ_READ? 5'd5: // load access fault
+                          5'd7; // store/amo access fault
+         exception_tval <= _vaddr;
+         state <= WAITING_RECEIVE;
+         if (operation_cause == CAUSE_FETCH) begin
+            fetch_response_enable <= 1'b1;               
+            fresp_data <= resp_data;
+         end else begin
+            mem_response_enable <= 1'b1;               
+            mresp_data <= resp_data;
+         end
+      end
    endtask
    
    // privilege checker
@@ -151,17 +168,17 @@ module mmu(
       end
    endfunction
 
-   function is_appropriate_operation(input [31:0] pte);
+   function is_appropriate_operation(input [31:0] pte, input cause, input mode);
       begin
-         is_appropriate_operation = ((operation_cause == CAUSE_FETCH && pte[3])
-                                     || (operation_cause == CAUSE_MEM && ((_mode == MEMREQ_READ && pte[1]) 
-                                                                          || (_mode == MEMREQ_WRITE && pte[2]))));
+         is_appropriate_operation = ((cause == CAUSE_FETCH && pte[3])
+                                     || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && pte[1]) 
+                                                                || (mode == MEMREQ_WRITE && pte[2]))));
       end
    endfunction // is_appropriate_operation
 
-   function [0:0] has_permission(input [31:0] pte);
+   function [0:0] has_permission(input [31:0] pte, input cause, input mode);
       begin
-         has_permission = is_appropriate_usermode(pte) && is_appropriate_operation(pte);
+         has_permission = is_appropriate_usermode(pte) && is_appropriate_operation(pte, cause, mode);
       end
    endfunction
    
@@ -198,98 +215,115 @@ module mmu(
    end
    
    // TLB
-   ///////////////////      
-   reg [42:0]                tlb_table [0:15];
+   ///////////////////
+   // 52 .. 52 (01) valid (1) or not (0) 
+   // 51 .. 42 (10) pte flags
+   // 41 .. 22 (20) virt addr
+   // 21 ... 0 (22) phys addr
+   reg [52:0]                tlb_table [0:15];
    
-   function [0:0] tlb_valid(input [42:0] entry);
+   function [0:0] tlb_valid(input [52:0] entry);
       begin
-         tlb_valid = entry[42];         
+         tlb_valid = entry[52];         
       end
    endfunction
    
-   function [19:0] tlb_tag(input [42:0] entry);
+   function [9:0] tlb_flags(input [52:0] entry);
+      begin
+         tlb_flags = entry[51:42];         
+      end
+   endfunction
+   
+   function [19:0] tlb_tag(input [52:0] entry);
       begin
          tlb_tag = entry[41:22];         
       end
    endfunction
    
-   function [21:0] tlb_phys(input [42:0] entry);
+   function [21:0] tlb_phys(input [52:0] entry);
       begin
          tlb_phys = entry[21:0];         
       end
    endfunction
 
+   function [31:0] tlb_to_pte(input [52:0] entry);
+      begin
+         tlb_to_pte = {tlb_phys(entry), tlb_flags(entry)};
+      end
+   endfunction
+
+   
    integer i;   
    task clear_tlb;
       begin
          for (i = 0; i < 16; i = i + 1) begin
-            tlb_table[i][42] <= 1'b0;               
+            tlb_table[i][52] <= 1'b0;               
          end         
       end
    endtask
 
-   task set_tlb(input [31:0] vaddr, input [33:0] paddr);
+   task set_tlb(input [31:0] vaddr, input [33:0] paddr, input [9:0] flags);
       begin
          if (tlb_valid(tlb_entry(vaddr))) begin
             // if there's a valid entry for vaddr, do nothing.
          end else if(!tlb_valid(tlb_table[0])) begin
-            tlb_table[0] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[1])) begin
-            tlb_table[1] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[1] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[2])) begin
-            tlb_table[2] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[2] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[3])) begin
-            tlb_table[3] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[3] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[4])) begin
-            tlb_table[4] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[4] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[5])) begin
-            tlb_table[5] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[5] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[6])) begin
-            tlb_table[6] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[6] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[7])) begin
-            tlb_table[7] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[7] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[8])) begin
-            tlb_table[8] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[8] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[9])) begin
-            tlb_table[9] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[9] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[10])) begin
-            tlb_table[10] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[10] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[11])) begin
-            tlb_table[11] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[11] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[12])) begin
-            tlb_table[12] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[12] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[13])) begin
-            tlb_table[13] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[13] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[14])) begin
-            tlb_table[14] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[14] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else if(!tlb_valid(tlb_table[15])) begin
-            tlb_table[15] <= {1'b1, vaddr[31:12], paddr[33:12]};            
+            tlb_table[15] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else begin
             // TODO: should be replaced with a better algorithm!
-            tlb_table[0] <= {1'b1, vaddr[31:12], paddr[33:12]};
+            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
          end
       end
    endtask
    
-   function [42:0] tlb_entry(input [31:0] vaddr);
-   begin 
-    tlb_entry = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_table[0]:
-                             tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_table[1]:                             
-                             tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_table[2]:                             
-                             tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_table[3]:                             
-                             tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_table[4]:                             
-                             tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_table[5]:                             
-                             tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_table[6]:                             
-                             tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_table[7]:                             
-                             tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_table[8]:                             
-                             tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_table[9]:                             
-                             tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_table[10]:                             
-                             tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_table[11]:                             
-                             tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_table[12]:                             
-                             tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_table[13]:                             
-                             tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_table[14]:                             
-                             tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_table[15]:
-                             43'b0;
+   function [52:0] tlb_entry(input [31:0] vaddr);
+      begin 
+         tlb_entry = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_table[0]:
+                     tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_table[1]:                             
+                     tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_table[2]:                             
+                     tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_table[3]:                             
+                     tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_table[4]:                             
+                     tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_table[5]:                             
+                     tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_table[6]:                             
+                     tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_table[7]:                             
+                     tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_table[8]:                             
+                     tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_table[9]:                             
+                     tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_table[10]:                             
+                     tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_table[11]:                             
+                     tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_table[12]:                             
+                     tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_table[13]:                             
+                     tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_table[14]:                             
+                     tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_table[15]:
+                     53'b0;
    end
    endfunction
 
@@ -309,7 +343,7 @@ module mmu(
    
    task handle_leaf(input level, input [31:0] pte);
       begin
-         if (!has_permission(pte)) begin
+         if (!has_permission(pte, operation_cause, _mode)) begin
             raise_pagefault_exception(5'd1, 27'd0);
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
@@ -317,7 +351,7 @@ module mmu(
             if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
                // raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});
                // v1.10.0 p.64
-               // TODO: update A bit on PTE
+               // TODO(linux): update A bit on PTE
             end
             
             state <= WAITING_RESPONSE;
@@ -327,7 +361,7 @@ module mmu(
             // NOTE: 34 -> 32
             req_addr <= level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
             // NOTE: 34 -> 22
-            set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr));
+            set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr), pte[9:0]);
             request_enable <= 1'b1;                  
          end
       end
@@ -355,8 +389,8 @@ module mmu(
             operation_cause <= (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;            
             if (flush_tlb) begin
                clear_tlb();
-                state <= WAITING_RECEIVE;            
-                mem_response_enable <= 1'b1;               
+               state <= WAITING_RECEIVE;            
+               mem_response_enable <= 1'b1;               
             end else if (paging_mode == 0 || actual_cpu_mode == CPU_M) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
@@ -366,12 +400,18 @@ module mmu(
                req_addr <= _req_addr;
             end else begin
                if (tlb_valid(tlb_entry(_req_addr))) begin
-                  state <= WAITING_RESPONSE;
-                  request_enable <= 1'b1;
-                  req_mode <= _req_mode;
-                  req_wdata <= _req_wdata;
-                  req_wstrb <= _req_wstrb;
-                  req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
+                  if (has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
+                                     (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM, 
+                                     _req_mode)) begin
+                     state <= WAITING_RESPONSE;
+                     request_enable <= 1'b1;
+                     req_mode <= _req_mode;
+                     req_wdata <= _req_wdata;
+                     req_wstrb <= _req_wstrb;
+                     req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
+                  end else begin
+                     raise_accessfault_exception();
+                  end
                end else begin
                   state <= FETCHING_FIRST_PTE;
                   request_enable <= 1'b1;
@@ -384,7 +424,8 @@ module mmu(
                end
             end
          end else if (state == FETCHING_FIRST_PTE && response_enable) begin
-            if (resp_data_le[0] == 0 || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
+            if (resp_data_le[0] == 0 
+                || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
                raise_pagefault_exception(5'd4, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0});               
             end else begin
                if (resp_data_le[1] == 1 || resp_data_le[3] == 1) begin
