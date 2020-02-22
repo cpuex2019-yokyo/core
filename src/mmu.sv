@@ -6,7 +6,7 @@ module mmu(
            input wire        rstn,
 
            input wire [31:0] satp,
-           input wire [1:0]  cpu_mode,
+           input wire [1:0]  mprv_cpu_mode,
            input wire [1:0]  actual_cpu_mode,
            input wire        mxr,
            input wire        sum,
@@ -343,7 +343,10 @@ module mmu(
    
    task handle_leaf(input level, input [31:0] pte);
       begin
-         if (!has_permission(pte, operation_cause, _mode, cpu_mode)) begin
+         if (!has_permission(pte, 
+                             operation_cause, 
+                             _mode, 
+                             (operation_cause == FETCH? actual_cpu_mode : mprv_cpu_mode))) begin
             raise_pagefault_exception(5'd1, 27'd0);
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
@@ -392,7 +395,8 @@ module mmu(
                clear_tlb();
                state <= WAITING_RECEIVE;            
                mem_response_enable <= 1'b1;               
-            end else if (paging_mode == 0 || (actual_cpu_mode == CPU_M && fetch_request_enable)) begin
+            end else if (paging_mode == 0 
+                         || (fetch_request_enable? actual_cpu_mode : mprv_cpu_mode) == CPU_M) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
                req_mode <= _req_mode;
@@ -404,7 +408,7 @@ module mmu(
                   if (has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
                                      (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM, 
                                      _req_mode,
-                                     cpu_mode)) begin
+                                     (fetch_request_enable? actual_cpu_mode : mprv_cpu_mode))) begin
                      state <= WAITING_RESPONSE;
                      request_enable <= 1'b1;
                      req_mode <= _req_mode;

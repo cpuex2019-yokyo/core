@@ -31,7 +31,7 @@ module core_wrapper
    
    // to MMU
    output wire [31:0] o_satp,
-   output wire [1:0]  o_cpu_mode,
+   output wire [1:0]  o_mprv_cpu_mode,
    output wire [1:0]  o_actual_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
