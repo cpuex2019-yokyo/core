@@ -16,9 +16,72 @@ module alu
    wire [63:0]       mul_temp_hsu = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({32'b0, register.rs2});
    wire [63:0]       mul_temp_hu = $signed({32'b0, register.rs1}) * $signed({32'b0, register.rs2});
 
-   wire [63:0] _extended_rs1 = {{32{register.rs1[31]}}, register.rs1};
-   wire [63:0] _tmp_srai = _extended_rs1 >> instr.imm[4:0];
-   wire [63:0] _tmp_sra = _extended_rs1 >> register.rs2[4:0];
+   wire [63:0]       _extended_rs1 = {{32{register.rs1[31]}}, register.rs1};
+   wire [63:0]       _tmp_srai = _extended_rs1 >> instr.imm[4:0];
+   wire [63:0]       _tmp_sra = _extended_rs1 >> register.rs2[4:0];
+
+   function [30:0] abs32(input [31:0] v);
+      begin
+         abs32 = v[31] == 1'b1? (~v[30:0]) + 31'b1:
+                 v[30:0];         
+      end
+   endfunction
+
+   function [30:0] divu31(input [30:0] dividend, input [30:0] divisor);
+      begin
+         divu31 = dividend / divisor;         
+      end
+   endfunction
+
+   function [31:0] div32(input [31:0] dividend, input [31:0] divisor);
+      begin
+         if (divisor == 32'b0) begin
+            div32 = (~32'b0);
+         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
+            div32 = dividend;
+         end else begin   
+            div32 = {dividend[31] ^ divisor[31], divu31(abs32(dividend), abs32(divisor))};            
+         end
+      end
+   endfunction
+
+   function [31:0] divu32(input [31:0] dividend, input [31:0] divisor);
+      begin
+         if (divisor == 32'b0) begin
+            divu32 = (~32'b0);
+         end else begin
+            divu32 = dividend / divisor;
+         end
+      end
+   endfunction
+   
+   function [30:0] remu31(input [30:0] dividend, input [30:0] divisor);
+      begin
+         remu31 = dividend % divisor;         
+      end
+   endfunction
+   
+   function [31:0] rem32(input [31:0] dividend, input [31:0] divisor);
+      begin
+         if (divisor == 32'b0) begin
+            rem32 = dividend;            
+         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
+            rem32 = 32'b0;
+         end else begin   
+            rem32 = {dividend[31], remu31(abs32(dividend), abs32(divisor))};            
+         end
+      end
+   endfunction
+
+   function [31:0] remu32(input [31:0] dividend, input [31:0] divisor);
+      begin
+         if (divisor == 32'b0) begin
+            remu32 = dividend;
+         end else begin
+            remu32 = dividend % divisor;
+         end
+      end
+   endfunction
    
    wire [31:0]       _result =
                      instr.lui? instr.imm:
@@ -80,16 +143,10 @@ module alu
                      instr.mulhsu? mul_temp_hsu[63:32]:
                      instr.mulhu? mul_temp_hu[63:32]:
                      // zero division does not cause any exceptions in RISC-V
-                     instr.div? (register.rs2 == 32'b0 ? (~32'b0):
-                                 (register.rs1 == 32'h80000000 && register.rs2 == ~(32'b0)) ? register.rs1:
-                                 $signed(register.rs1) / $signed(register.rs2)):
-                     instr.divu? (register.rs2 == 32'b0 ? (~32'b0):
-                                  register.rs1 / register.rs2):
-                     instr.rem? (register.rs2 == 32'b0 ? register.rs1: 
-                                 (register.rs1 == 32'h80000000 && register.rs2 == ~(32'b0)) ? 32'b0:
-                                 $signed(register.rs1) % $signed(register.rs2)):
-                     instr.remu? (register.rs2 == 32'b0 ? register.rs1:
-                                  register.rs1 % register.rs2):                 
+                     instr.div? div32(register.rs1, register.rs2):
+                     instr.rem? rem32(register.rs1, register.rs2):
+                     instr.divu? divu32(register.rs1, register.rs2):
+                     instr.remu? remu32(register.rs1, register.rs2):
                      ///// rv32m /////
                      instr.amoswap? 32'b0: // will be handed in core.sv
                      instr.amoand? 32'b0: // will be handed in core.sv
