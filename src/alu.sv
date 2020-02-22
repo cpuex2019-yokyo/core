@@ -20,34 +20,17 @@ module alu
    wire [63:0]       _tmp_srai = _extended_rs1 >> instr.imm[4:0];
    wire [63:0]       _tmp_sra = _extended_rs1 >> register.rs2[4:0];
 
-   function [30:0] abs32(input [31:0] v);
+   function [31:0] abs32(input [31:0] v);
       begin
-         abs32 = v[31] ? (~v[30:0] + 31'b1) : v[30:0];         
+         abs32 = v[31] ? (~v + 32'b1) :
+                 v;         
       end
    endfunction
 
-   function [31:0] u31_to_s32(input sign, input [30:0] v);
+   function [31:0] u32_to_s32(input sign, input [31:0] v);
       begin
-         u31_to_s32 = sign? ~{1'b0, v} + 32'b1:
-                      {1'b0, v};         
-      end
-   endfunction
-
-   function [30:0] divu31(input [30:0] dividend, input [30:0] divisor);
-      begin
-         divu31 = dividend / divisor;         
-      end
-   endfunction    
-
-   function [31:0] div32(input [31:0] dividend, input [31:0] divisor);
-      begin
-         if (divisor == 32'b0) begin
-            div32 = (~32'b0);
-         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
-            div32 = dividend;
-         end else begin   
-            div32 = u31_to_s32(dividend[31] ^ divisor[31], divu31(abs32(dividend), abs32(divisor)));            
-         end
+         u31_to_s32 = sign? ~v + 32'b1:
+                      v;         
       end
    endfunction
 
@@ -59,11 +42,27 @@ module alu
             divu32 = dividend / divisor;
          end
       end
+   endfunction 
+   
+   function [31:0] div32(input [31:0] dividend, input [31:0] divisor);
+      begin
+         if (divisor == 32'b0) begin
+            div32 = (~32'b0);
+         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
+            div32 = dividend;
+         end else begin   
+            div32 = u32_to_s32(dividend[31] ^ divisor[31], divu32(abs32(dividend), abs32(divisor)));            
+         end
+      end
    endfunction
    
-   function [30:0] remu31(input [30:0] dividend, input [30:0] divisor);
+   function [31:0] remu32(input [31:0] dividend, input [31:0] divisor);
       begin
-         remu31 = dividend % divisor;         
+         if (divisor == 32'b0) begin
+            remu32 = dividend;
+         end else begin
+            remu32 = dividend % divisor;
+         end
       end
    endfunction
    
@@ -74,20 +73,11 @@ module alu
          end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
             rem32 = 32'b0;
          end else begin   
-            rem32 = u31_to_s32(dividend[31], remu31(abs32(dividend), abs32(divisor)));            
+            rem32 = u32_to_s32(dividend[31], remu32(abs32(dividend), abs32(divisor)));            
          end
       end
    endfunction
 
-   function [31:0] remu32(input [31:0] dividend, input [31:0] divisor);
-      begin
-         if (divisor == 32'b0) begin
-            remu32 = dividend;
-         end else begin
-            remu32 = dividend % divisor;
-         end
-      end
-   endfunction
    
    wire [31:0]       _result =
                      instr.lui? instr.imm:
