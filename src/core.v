@@ -32,6 +32,7 @@ module core_wrapper
    // to MMU
    output wire [31:0] o_satp,
    output wire [1:0]  o_cpu_mode,
+   output wire [1:0]  o_actual_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
    output wire        flush_tlb,
@@ -68,6 +69,7 @@ module core_wrapper
 
               .o_satp(o_satp),
               .o_cpu_mode(o_cpu_mode),
+              .o_actual_cpu_mode(o_actual_cpu_mode),
               .o_mxr(o_mxr),
               .o_sum(o_sum),
               .flush_tlb(flush_tlb),

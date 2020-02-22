@@ -33,6 +33,7 @@ module core
    // to MMU
    output wire [31:0] o_satp,
    output wire [1:0]  o_cpu_mode,
+   output wire [1:0]  o_actual_cpu_mode,
    output wire        o_mxr,
    output wire        o_sum,
    output wire        flush_tlb,
@@ -903,6 +904,7 @@ module core
 
    assign o_satp = _satp;
    assign o_cpu_mode = _mstatus[17]? _mstatus[12:11] : cpu_mode;
+   assign o_actual_cpu_mode = cpu_mode;   
    assign o_mxr = _mstatus[19];
    assign o_sum = _mstatus[18];
    
