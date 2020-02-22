@@ -162,7 +162,7 @@ module mmu(
    // mxr = 1 ... read requires r or x flag
    function [0:0] is_appropriate_mode(input [1:0] cpu_mode, input [31:0] pte);
       begin
-         is_appropriate_usermode = ((cpu_mode == CPU_U && pte[4])
+         is_appropriate_mode = ((cpu_mode == CPU_U && pte[4])
                                     || (cpu_mode == CPU_S && ((sum && pte[4]) || (~pte[4])))
                                     || (cpu_mode == CPU_M));         
       end
