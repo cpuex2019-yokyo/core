@@ -803,78 +803,71 @@ module core
    // here we assume that this function will be used in the exec phase
    task write_csr(input [11:0] addr, input[31:0] value); 
       begin
-         if ((instr.csrrw)
-             || (instr.csrrs && instr.rs1 != 0)
-             || (instr.csrrc && instr.rs1 != 0)
-             || (instr.csrrwi)
-             || (instr.csrrsi && instr.rs1 != 0)
-             || (instr.csrrci && instr.rs1 != 0)) begin
-            case (addr) 
-              // U mode            
-              // 12'hc00: _cycle;
-              // 12'hc01: _time;
-              // 12'hc02: _instret;
-              // 12'hc81: _timeh;
-              // 12'hc82: _instreth;
-              // hpmcounterN
-              // hpmcounterNh
+         case (addr) 
+           // U mode            
+           // 12'hc00: _cycle;
+           // 12'hc01: _time;
+           // 12'hc02: _instret;
+           // 12'hc81: _timeh;
+           // 12'hc82: _instreth;
+           // hpmcounterN
+           // hpmcounterNh
 
-              // S mode
-              12'h100: write_sstatus(value);
-              //12'h102: write_sedeleg(value);
-              //12'h103: write_sideleg(value);
-              12'h104: write_sie(value);
-              12'h105: write_stvec(value);
-              12'h106: write_scounteren(value);
-              12'h140: write_sscratch(value);
-              12'h141: write_sepc(value);
-              12'h142: write_scause(value);
-              12'h143: write_stval(value);
-              12'h144: write_sip(value);
-              12'h180: write_satp(value);   
+           // S mode
+           12'h100: write_sstatus(value);
+           //12'h102: write_sedeleg(value);
+           //12'h103: write_sideleg(value);
+           12'h104: write_sie(value);
+           12'h105: write_stvec(value);
+           12'h106: write_scounteren(value);
+           12'h140: write_sscratch(value);
+           12'h141: write_sepc(value);
+           12'h142: write_scause(value);
+           12'h143: write_stval(value);
+           12'h144: write_sip(value);
+           12'h180: write_satp(value);   
 
-              // M mode
-              12'h300: write_mstatus(value);            
-              // 12'h301: misa
-              12'h302: write_medeleg(value);            
-              12'h303: write_mideleg(value);            
-              12'h304: write_mie(value);            
-              12'h305: write_mtvec(value);            
-              12'h306: write_mcounteren(value);            
-              12'h340: write_mscratch(value);            
-              12'h341: write_mepc(value);            
-              12'h342: write_mcause(value);            
-              12'h343: write_mtval(value);            
-              12'h344: write_mip(value);            
-              12'h3a0: write_pmpcfg(value, 127);            
-              12'h3a1: write_pmpcfg(value, 95);            
-              12'h3a2: write_pmpcfg(value, 64);
-              12'h3a3: write_pmpcfg(value, 31);
-              12'h3b0: write_pmpaddr(value, 0);
-              12'h3b1: write_pmpaddr(value, 1);
-              12'h3b2: write_pmpaddr(value, 2);
-              12'h3b3: write_pmpaddr(value, 3);
-              12'h3b4: write_pmpaddr(value, 4);
-              12'h3b5: write_pmpaddr(value, 5);
-              12'h3b6: write_pmpaddr(value, 6);
-              12'h3b7: write_pmpaddr(value, 7);
-              12'h3b8: write_pmpaddr(value, 8);
-              12'h3b9: write_pmpaddr(value, 9);
-              12'h3ba: write_pmpaddr(value, 10);
-              12'h3bb: write_pmpaddr(value, 11);
-              12'h3bc: write_pmpaddr(value, 12);
-              12'h3bd: write_pmpaddr(value, 13);
-              12'h3be: write_pmpaddr(value, 14);
-              12'h3bf: write_pmpaddr(value, 15);
-              // 12'hb00: _mcycle;
-              // 12'hb02: _minstret;
-              // 12'hb80: _mcycleh;
-              // 12'hb82: _minstreth;
-              // mhpmcounterN
-              // mhpmcounterNh
-              // mhpmevent*
-            endcase           
-         end
+           // M mode
+           12'h300: write_mstatus(value);            
+           // 12'h301: misa
+           12'h302: write_medeleg(value);            
+           12'h303: write_mideleg(value);            
+           12'h304: write_mie(value);            
+           12'h305: write_mtvec(value);            
+           12'h306: write_mcounteren(value);            
+           12'h340: write_mscratch(value);            
+           12'h341: write_mepc(value);            
+           12'h342: write_mcause(value);            
+           12'h343: write_mtval(value);            
+           12'h344: write_mip(value);            
+           12'h3a0: write_pmpcfg(value, 127);            
+           12'h3a1: write_pmpcfg(value, 95);            
+           12'h3a2: write_pmpcfg(value, 64);
+           12'h3a3: write_pmpcfg(value, 31);
+           12'h3b0: write_pmpaddr(value, 0);
+           12'h3b1: write_pmpaddr(value, 1);
+           12'h3b2: write_pmpaddr(value, 2);
+           12'h3b3: write_pmpaddr(value, 3);
+           12'h3b4: write_pmpaddr(value, 4);
+           12'h3b5: write_pmpaddr(value, 5);
+           12'h3b6: write_pmpaddr(value, 6);
+           12'h3b7: write_pmpaddr(value, 7);
+           12'h3b8: write_pmpaddr(value, 8);
+           12'h3b9: write_pmpaddr(value, 9);
+           12'h3ba: write_pmpaddr(value, 10);
+           12'h3bb: write_pmpaddr(value, 11);
+           12'h3bc: write_pmpaddr(value, 12);
+           12'h3bd: write_pmpaddr(value, 13);
+           12'h3be: write_pmpaddr(value, 14);
+           12'h3bf: write_pmpaddr(value, 15);
+           // 12'hb00: _mcycle;
+           // 12'hb02: _minstret;
+           // 12'hb80: _mcycleh;
+           // 12'hb82: _minstreth;
+           // mhpmcounterN
+           // mhpmcounterNh
+           // mhpmevent*
+         endcase           
       end
    endtask
    
@@ -897,7 +890,18 @@ module core
       end
    endfunction 
 
+   function [0:0] has_enough_csr_priv(input [11:0] addr, input [1:0] cpu_mode);
+      begin
+         has_enough_csr_priv = addr[9:8] <= cpu_mode;         
+      end
+   endfunction
 
+   function [0:0] is_csr_writable(input [11:0] addr);      
+      begin
+         is_csr_writable = addr[11:10] != 2'b11;         
+      end
+   endfunction
+   
    /////////////////////
    // main
    /////////////////////
@@ -1026,13 +1030,26 @@ module core
          end else if (state == EXEC_PRIV) begin 
             exec_enabled <= 0;
             if (is_csr_valid) begin
-               state <= WRITE;
-
-               write_csr(instr.imm[11:0], csr_v(csr_value));
-
-               // start to write ... e -> w
-               write_enabled <= 1;
-               data_to_write <= csr_value;          
+               if (has_enough_csr_priv(instr.imm[11:0], cpu_mode)) begin
+                  if (instr.writes_to_csr 
+                      && (!is_csr_writable(instr.imm[11:0]))) begin
+                     // write challenge to read-only memory is detected.
+                     raise_illegal_instruction(instr_raw);
+                     state <= TRAP;                                       
+                  end else begin
+                     if (instr.writes_to_csr) begin
+                        write_csr(instr.imm[11:0], csr_v(csr_value));
+                     end
+                     state <= WRITE;
+                     // start to write ... e -> w
+                     write_enabled <= 1;
+                     data_to_write <= csr_value;
+                  end
+               end else begin
+                  // (r or w) challenge with no priviledge is detected.
+                  raise_illegal_instruction(instr_raw);
+                  state <= TRAP;                  
+               end
             end else begin
                // invalid_csr_addr ... instr.imm[11:0]
                raise_illegal_instruction(instr_raw);

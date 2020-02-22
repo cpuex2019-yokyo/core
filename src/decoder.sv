@@ -204,10 +204,10 @@ module decoder
                           /////////                        
                           || _lui
                           || _auipc
-                          
+               
                           || _jal
                           || _jalr
-                          
+               
                           // conditional branch
                           || _beq
                           || _bne
@@ -291,7 +291,7 @@ module decoder
                           || _sfence_vma);                                      
             
             /////////
-            // rv32i
+              // rv32i
             /////////
             // lui, auipc
             instr.lui <= _lui;
@@ -403,14 +403,22 @@ module decoder
                                      || _mret
                                      || _sret
                                      || _wfi
-                                     || _sfence_vma);            
+                                     || _sfence_vma);
+
+            instr.writes_to_csr <= ((_csrrw)
+                                    || (_csrrs && _rs1 != 0)
+                                    || (_csrrc && _rs1 != 0)
+                                    || (_csrrwi)
+                                    || (_csrrsi && _rs1 != 0)
+                                    || (_csrrci && _rs1 != 0));
+            
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
             instr.is_conditional_jump <= _is_conditional_jump;
 
             /////////
-            // operands
+              // operands
             /////////            
             instr.rd <= (r_type || i_type || u_type || j_type) ? _rd : 5'b00000;
             instr.rs1 <= (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;
