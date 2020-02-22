@@ -1120,7 +1120,7 @@ module core
                // NOTE: is the value of *epc correct?
                // TODO(linux): cover all patterns of interrupt
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
-               set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted);
+               set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted[4:0]);
                
                set_epc(next_cpu_mode_when_interrupted, instr.pc);                  
                set_cause(next_cpu_mode_when_interrupted, {1'b1, exception_vec_when_interrupted[30:0]});
