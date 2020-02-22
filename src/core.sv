@@ -383,32 +383,22 @@ module core
    wire [31:0]         _time = time_full[31:0];
    wire [31:0]         _timeh = time_full[63:32];
    
-   // interrupts
+   // traps
    /////////
-   wire                is_interrupted = 
-                       (((_mip[11] && _mie[11]) // for M-mode trap
-                         || (_mip[7] && _mie[7]) 
-                         || (_mip[3] && _mie[3])) 
-                        && ((_mstatus_mie && cpu_mode == CPU_M)
-                            || (CPU_M > cpu_mode)))
-                       || (((_mideleg[11] && _mip[11] && _mie[11]) // for S-mode trap 
-                            || (_mideleg[7] && _mip[7] && _mie[7]) 
-                            || (_mideleg[3] && _mip[3] && _mie[3])
-                            || (_mip[9] && _mie[9])
-                            || (_mip[5] && _mie[5])
-                            || (_mip[1] && _mie[1]))
-                           && ((cpu_mode == CPU_S && _mstatus_sie) 
-                               || CPU_S > cpu_mode));
-
-   wire [1:0]          next_cpu_mode_when_interrupted =
-                       (_mip[11] && _mie[11])? (_mideleg[11]? CPU_S : CPU_M):
-                       (_mip[3] && _mie[3])? (_mideleg[3]? CPU_S : CPU_M):
-                       (_mip[7] && _mie[7])? (_mideleg[7]? CPU_S : CPU_M):
-                       (_mip[9] && _mie[9])? CPU_S:
-                       (_mip[1] && _mie[1])? CPU_S:
-                       (_mip[5] && _mie[5])? CPU_S:
-                       cpu_mode;   
    
+   // interrupts
+   wire                intr_m_enabled = (cpu_mode < CPU_M) || (cpu_mode == CPU_M);
+   wire                intr_s_enabled = (cpu_mode < CPU_S) || (cpu_mode == CPU_S);
+
+   wire                intr_m_pending = _mip & _mie & ~(_mideleg) & {32{intr_m_enabled}};
+   wire                intr_s_pending = _mip & _mie & _mideleg & {32{intr_s_enabled}});   
+   
+   wire                is_interrupted = intr_m_pending || intr_s_pending;
+   
+   // thiese two wires should be used only when is_interrupted is asserted.
+   wire [1:0]          next_cpu_mode_when_interrupted =
+                       intr_m_pending? CPU_M:
+                       CPU_S;   
    wire [31:0]         exception_vec_when_interrupted =
                        (_mip[11] && _mie[11])? (_mideleg[11]? 32'd9 : 32'd11):
                        (_mip[3] && _mie[3])? (_mideleg[3]? 32'd1 : 32'd3):
@@ -417,10 +407,12 @@ module core
                        (_mip[1] && _mie[1])? 32'd1:
                        (_mip[5] && _mie[5])? 32'd5:
                        32'd0;
-   
+
+   // exceptions
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
-   (* mark_debug = "true" *) reg [31:0]          exception_tval;        
+   (* mark_debug = "true" *) reg [31:0]          exception_tval;
    wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;                 
+   
    
    task raise_illegal_instruction(input [31:0] _tval);
       begin
