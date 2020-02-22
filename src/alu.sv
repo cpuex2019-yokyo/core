@@ -26,11 +26,18 @@ module alu
       end
    endfunction
 
+   function [31:0] u31_to_s32(input sign, input [30:0] v);
+      begin
+         u31_to_s32 = sign? ~{1'b0, v} + 32'b1:
+                      {1'b0, v};         
+      end
+   endfunction
+
    function [30:0] divu31(input [30:0] dividend, input [30:0] divisor);
       begin
          divu31 = dividend / divisor;         
       end
-   endfunction
+   endfunction    
 
    function [31:0] div32(input [31:0] dividend, input [31:0] divisor);
       begin
@@ -39,7 +46,7 @@ module alu
          end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
             div32 = dividend;
          end else begin   
-            div32 = {dividend[31] ^ divisor[31], divu31(abs32(dividend), abs32(divisor))};            
+            div32 = u31_to_s32(dividend[31] ^ divisor[31], divu31(abs32(dividend), abs32(divisor)));            
          end
       end
    endfunction
@@ -67,7 +74,7 @@ module alu
          end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
             rem32 = 32'b0;
          end else begin   
-            rem32 = {dividend[31], remu31(abs32(dividend), abs32(divisor))};            
+            rem32 = u31_to_s32(dividend[31], remu31(abs32(dividend), abs32(divisor)));            
          end
       end
    endfunction
