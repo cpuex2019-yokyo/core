@@ -29,7 +29,7 @@ module alu
 
    function [31:0] u32_to_s32(input sign, input [31:0] v);
       begin
-         u31_to_s32 = sign? ~v + 32'b1:
+         u32_to_s32 = sign? ~v + 32'b1:
                       v;         
       end
    endfunction
