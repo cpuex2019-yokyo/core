@@ -199,87 +199,97 @@ module decoder
          if (enabled) begin
             completed <= 1;
             succeeded <= (1'b0
-                        /////////
-                        // rv32i
-                        /////////                        
-                        || _lui
-                        || _auipc
-                        || _jalr
-                        || _beq
-                        || _bne
-                        || _blt
-                        || _bge
-                        || _bltu
-                        || _bgeu
-                        || _lb
-                        || _lh
-                        || _lw
-                        || _lbu
-                        || _lhu
-                        || _sb
-                        || _sh
-                        || _sw
-                        || _addi
-                        || _slti
-                        || _sltiu
-                        || _xori
-                        || _andi
-                        || _slli
-                        || _srli
-                        || _srai
-                        || _add
-                        || _sub
-                        || _sll
-                        || _slt
-                        || _sltu
-                        || _xor
-                        || _srl
-                        || _sra
-                        || _or
-                        || _and
-                        || _fence
-                        || _fencei
-                        || _ecall
-                        || _ebreak
-                        || _csrrw
-                        || _csrrs
-                        || _csrrc
-                        || _csrrwi
-                        || _csrrsi
-                        || _csrrci
-                        /////////
-                        // rv32m
-                        /////////                        
-                        || _mul
-                        || _mulh
-                        || _mulhsu
-                        || _mulhu
-                        || _div
-                        || _divu
-                        || _rem
-                        || _remu
-                        /////////
-                        // rv32a
-                        /////////                        
-                        || _lr
-                        || _sc
-                        || _amoswap
-                        || _amoadd
-                        || _amoxor
-                        || _amoand
-                        || _amoor
-                        || _amomin
-                        || _amomax
-                        || _amominu
-                        || _amomaxu
-                        /////////
-                        // rv32s
-                        /////////                        
-                        || _sret
-                        || _mret
-                        || _wfi
-                        || _sfence_vma);                                      
-                        
+                          /////////
+                          // rv32i
+                          /////////                        
+                          || _lui
+                          || _auipc
+                          
+                          || _jal
+                          || _jalr
+                          
+                          // conditional branch
+                          || _beq
+                          || _bne
+                          || _blt
+                          || _bge
+                          || _bltu
+                          || _bgeu
+
+                          // load store
+                          || _lb
+                          || _lh
+                          || _lw
+                          || _lbu
+                          || _lhu
+                          || _sb
+                          || _sh
+                          || _sw
+                          || _addi
+                          || _slti
+                          || _sltiu
+                          || _xori
+                          || _ori
+                          || _andi
+                          || _slli
+                          || _srli
+                          || _srai
+                          // arith others
+                          || _add
+                          || _sub
+                          || _sll
+                          || _slt
+                          || _sltu
+                          || _xor
+                          || _srl
+                          || _sra
+                          || _or
+                          || _and
+
+                          // others
+                          || _fence
+                          || _fencei
+                          || _ecall
+                          || _ebreak
+                          || _csrrw
+                          || _csrrs
+                          || _csrrc
+                          || _csrrwi
+                          || _csrrsi
+                          || _csrrci
+                          /////////
+                          // rv32m
+                          /////////                        
+                          || _mul
+                          || _mulh
+                          || _mulhsu
+                          || _mulhu
+                          || _div
+                          || _divu
+                          || _rem
+                          || _remu
+                          /////////
+                          // rv32a
+                          /////////                        
+                          || _lr
+                          || _sc
+                          || _amoswap
+                          || _amoadd
+                          || _amoxor
+                          || _amoand
+                          || _amoor
+                          || _amomin
+                          || _amomax
+                          || _amominu
+                          || _amomaxu
+                          /////////
+                          // rv32s
+                          /////////                        
+                          || _sret
+                          || _mret
+                          || _wfi
+                          || _sfence_vma);                                      
+            
             /////////
             // rv32i
             /////////
