@@ -22,8 +22,7 @@ module alu
 
    function [30:0] abs32(input [31:0] v);
       begin
-         abs32 = v[31] == 1'b1? (~v[30:0]) + 31'b1:
-                 v[30:0];         
+         abs32 = v[31] ? (~v[30:0] + 31'b1) : v[30:0];         
       end
    endfunction
 
