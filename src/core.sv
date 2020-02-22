@@ -1131,7 +1131,7 @@ module core
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
                set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted[4:0]);
                // TODO: replace instr.pc to pc if there's no semantical change
-               set_epc(next_cpu_mode_when_interrupted, instr.pc);                  
+               set_epc(next_cpu_mode_when_interrupted, is_jump_chosen? jump_dest : pc + 4); 
                set_cause(next_cpu_mode_when_interrupted, {1'b1, exception_vec_when_interrupted[30:0]});
                set_tval(next_cpu_mode_when_interrupted, 32'd0);
                set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
