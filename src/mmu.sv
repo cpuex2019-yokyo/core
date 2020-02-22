@@ -160,15 +160,15 @@ module mmu(
    // when
    // mxr = 0 ... read requires r flag
    // mxr = 1 ... read requires r or x flag
-   function is_appropriate_usermode(input [31:0] pte);
+   function [0:0] is_appropriate_mode(input [1:0] cpu_mode, input [31:0] pte);
       begin
          is_appropriate_usermode = ((cpu_mode == CPU_U && pte[4])
-                                    || (cpu_mode == CPU_S && sum)
-                                    || (~pte[4]));         
+                                    || (cpu_mode == CPU_S && ((sum && pte[4]) || (~pte[4])))
+                                    || (cpu_mode == CPU_M));         
       end
    endfunction
 
-   function is_appropriate_operation(input [31:0] pte, input cause, input mode);
+   function [0:0] is_appropriate_operation(input [31:0] pte, input cause, input mode);
       begin
          is_appropriate_operation = ((cause == CAUSE_FETCH && pte[3])
                                      || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && pte[1]) 
@@ -176,9 +176,9 @@ module mmu(
       end
    endfunction // is_appropriate_operation
 
-   function [0:0] has_permission(input [31:0] pte, input cause, input mode);
+   function [0:0] has_permission(input [31:0] pte, input cause, input mode, input [1:0] cpu_mode);
       begin
-         has_permission = is_appropriate_usermode(pte) && is_appropriate_operation(pte, cause, mode);
+         has_permission = is_appropriate_mode(cpu_mode, pte) && is_appropriate_operation(pte, cause, mode);
       end
    endfunction
    
@@ -343,12 +343,13 @@ module mmu(
    
    task handle_leaf(input level, input [31:0] pte);
       begin
-         if (!has_permission(pte, operation_cause, _mode)) begin
+         if (!has_permission(pte, operation_cause, _mode, cpu_mode)) begin
             raise_pagefault_exception(5'd1, 27'd0);
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
          end else begin
-            if (pte[6] == 0 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
+            if (pte[6] == 0 
+                || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
                // raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});
                // v1.10.0 p.64
                // TODO(linux): update A bit on PTE
@@ -391,7 +392,7 @@ module mmu(
                clear_tlb();
                state <= WAITING_RECEIVE;            
                mem_response_enable <= 1'b1;               
-            end else if (paging_mode == 0 || actual_cpu_mode == CPU_M) begin
+            end else if (paging_mode == 0 || (actual_cpu_mode == CPU_M && fetch_request_enable)) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
                req_mode <= _req_mode;
@@ -402,7 +403,8 @@ module mmu(
                if (tlb_valid(tlb_entry(_req_addr))) begin
                   if (has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
                                      (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM, 
-                                     _req_mode)) begin
+                                     _req_mode,
+                                     cpu_mode)) begin
                      state <= WAITING_RESPONSE;
                      request_enable <= 1'b1;
                      req_mode <= _req_mode;
