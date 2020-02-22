@@ -387,11 +387,11 @@ module core
    /////////
    
    // interrupts
-   wire                intr_m_enabled = (cpu_mode < CPU_M) || (cpu_mode == CPU_M);
-   wire                intr_s_enabled = (cpu_mode < CPU_S) || (cpu_mode == CPU_S);
+   wire                intr_m_enabled = (cpu_mode < CPU_M) || (cpu_mode == CPU_M && _mstatus_mie);
+   wire                intr_s_enabled = (cpu_mode < CPU_S) || (cpu_mode == CPU_S && _mstatus_sie);
 
-   wire                intr_m_pending = _mip & _mie & ~(_mideleg) & {32{intr_m_enabled}};
-   wire                intr_s_pending = _mip & _mie & _mideleg & {32{intr_s_enabled}};   
+   wire                intr_m_pending = |(_mip & _mie & ~(_mideleg) & {32{intr_m_enabled}});
+   wire                intr_s_pending = |(_mip & _mie & _mideleg & {32{intr_s_enabled}});   
    
    wire                is_interrupted = intr_m_pending || intr_s_pending;
    
@@ -399,6 +399,7 @@ module core
    wire [1:0]          next_cpu_mode_when_interrupted =
                        intr_m_pending? CPU_M:
                        CPU_S;   
+   
    wire [31:0]         exception_vec_when_interrupted =
                        (_mip[11] && _mie[11])? (_mideleg[11]? 32'd9 : 32'd11):
                        (_mip[3] && _mie[3])? (_mideleg[3]? 32'd1 : 32'd3):
