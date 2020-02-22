@@ -917,12 +917,11 @@ module core
          end else if (state == FETCH && is_fetch_done) begin
             _mcycle_full <= _mcycle_full + 1;
             
-            // TODO: mem_exception_enable
             if (mmu_exception_enable) begin
                state <= TRAP;               
                exception_number <= mmu_exception_vec;
                exception_tval <= mmu_exception_tval; 
-            end else if (instr_raw == 32'b0) begin // TODO: cover more exception
+            end else if (instr_raw == 32'b0) begin
                raise_illegal_instruction(instr_raw);
                state <= TRAP;
             end else begin
@@ -983,9 +982,10 @@ module core
                   end
                end else begin
                   state <= EXEC;
+                  // exec_enabled <= 1 is already done.
                end
             end else begin
-               // if failed to decode instr_raw 
+               // if failed to decode instr_raw  ...
                state <= TRAP;
                raise_illegal_instruction(instr_raw);               
             end
@@ -997,7 +997,7 @@ module core
             // here we do not enable write yet
             data_to_write <= mem_result;
 
-            // start to store ... m -> (binop)-> m
+            // start to store ... m -> (binop) -> m
             // op tmp, rs2, rd -> sw tmp, (rs1)
             mem_enabled <= 1;                    
             mem_arg <= instr.amoswap? register.rs2:
@@ -1127,10 +1127,9 @@ module core
                // xstatus.mpie <= xstatus.mie;
                // xstatus.mpp <= y;
                // NOTE: is the value of *epc correct?
-               // TODO(linux): cover all patterns of interrupt
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
                set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted[4:0]);
-               
+               // TODO: replace instr.pc to pc if there's no semantical change
                set_epc(next_cpu_mode_when_interrupted, instr.pc);                  
                set_cause(next_cpu_mode_when_interrupted, {1'b1, exception_vec_when_interrupted[30:0]});
                set_tval(next_cpu_mode_when_interrupted, 32'd0);
@@ -1156,7 +1155,7 @@ module core
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
                set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);
                
-               set_epc(next_cpu_mode_when_exception, pc);                  
+               set_epc(next_cpu_mode_when_exception, pc);      
                set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
                set_tval(next_cpu_mode_when_exception, exception_tval);
                set_mstatus_by_trap(next_cpu_mode_when_exception);               
