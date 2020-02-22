@@ -391,7 +391,7 @@ module core
    wire                intr_s_enabled = (cpu_mode < CPU_S) || (cpu_mode == CPU_S);
 
    wire                intr_m_pending = _mip & _mie & ~(_mideleg) & {32{intr_m_enabled}};
-   wire                intr_s_pending = _mip & _mie & _mideleg & {32{intr_s_enabled}});   
+   wire                intr_s_pending = _mip & _mie & _mideleg & {32{intr_s_enabled}};   
    
    wire                is_interrupted = intr_m_pending || intr_s_pending;
    
