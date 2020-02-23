@@ -456,14 +456,14 @@ module core
       end
    endtask
    
-   task raise_mmu_exception(input [31:0] _tval);
+   task raise_mmu_exception();
       begin
          exception_number <= mmu_exception_vec;
          exception_tval <= mmu_exception_tval;
       end
    endtask
 
-   task raise_mem_exception(input [31:0] _tval);
+   task raise_mem_exception();
       begin
          exception_number <= mem_exception_vec;
          exception_tval <= mem_exception_tval;
