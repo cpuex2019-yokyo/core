@@ -1189,9 +1189,11 @@ module core
                // interrupted address is pc (== next_pc).
                // instruction at old pc (one before being updated in WRITE stage) has already been completed!
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_interrupted);
-               set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, exception_vec_when_interrupted[4:0]);
+               set_pc_by_tvec(1'b1, next_cpu_mode_when_interrupted, 
+                              exception_vec_when_interrupted[4:0]);
                set_epc(next_cpu_mode_when_interrupted, pc); 
-               set_cause(next_cpu_mode_when_interrupted, {1'b1, exception_vec_when_interrupted[30:0]});
+               set_cause(next_cpu_mode_when_interrupted, 
+                         {1'b1, exception_vec_when_interrupted[30:0]});
                set_tval(next_cpu_mode_when_interrupted, 32'd0);
                set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
             end else begin
