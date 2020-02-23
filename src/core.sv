@@ -420,16 +420,15 @@ module core
    // - 9: Supervisor external interrupt
    // - 11: Machine external interrupt
    // According to priv. v1.10 p.30, these are prioritized as follows:
-   // - order among different kinds of interrupts: external interrupts > software interrupts > timer interrupts
    // - order among same kinds of interrupts: M > S (> U).   
-   wire [31:0]         exception_vec_when_interrupted =
-                       intr_m_pending? ((_mip[11] && _mie[11])? 32'd11:
-                                        (_mip[3] && _mie[3])? 32'd3:
-                                        (_mip[7] && _mie[7])? 32'd7):
-                       intr_s_pending? ((_mip[9] && _mie[9])? 32'd9:
-                                        (_mip[1] && _mie[1])? 32'd1:
-                                        (_mip[5] && _mie[5])? 32'd5):
-                       32'd0;
+   // - order among different kinds of interrupts: external interrupts > software interrupts > timer interrupts
+   wire [31:0]         exception_vec_when_interrupted =((_mip[11] && _mie[11])? 32'd11:
+                                                        (_mip[3] && _mie[3])? 32'd3:
+                                                        (_mip[7] && _mie[7])? 32'd7:
+                                                        (_mip[9] && _mie[9])? 32'd9:
+                                                        (_mip[1] && _mie[1])? 32'd1:
+                                                        (_mip[5] && _mie[5])? 32'd5:
+                                                        32'd0);
 
    // exceptions
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
