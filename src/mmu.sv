@@ -115,7 +115,8 @@ module mmu(
       end
    endfunction // ppn0
 
-   (* mark_debug = "true" *) reg [31:0] exception_intl_cause;   
+   (* mark_debug = "true" *) reg [31:0] exception_intl_cause;
+   
    task raise_pagefault_exception(input [4:0] intl_cause, input [26:0] debug_info);
       begin
          exception_enable <= 1'b1;         
@@ -163,8 +164,8 @@ module mmu(
    function [0:0] is_appropriate_mode(input [1:0] cpu_mode, input [31:0] pte);
       begin
          is_appropriate_mode = ((cpu_mode == CPU_U && pte[4])
-                                    || (cpu_mode == CPU_S && ((sum && pte[4]) || (~pte[4])))
-                                    || (cpu_mode == CPU_M));         
+                                || (cpu_mode == CPU_S && ((sum && pte[4]) || (~pte[4])))
+                                || (cpu_mode == CPU_M));         
       end
    endfunction
 
@@ -324,21 +325,21 @@ module mmu(
                      tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_table[14]:                             
                      tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_table[15]:
                      53'b0;
-   end
+      end
    endfunction
 
    // main logic
    ///////////////////   
    function [33:0] l1_result(input [31:0] pte, input [31:0] vaddr);
-   begin
-    l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
-   end  
+      begin
+         l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
+      end  
    endfunction
    
    function [33:0] l0_result(input [31:0] pte, input [31:0] vaddr);
-   begin
-    l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
-   end  
+      begin
+         l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
+      end  
    endfunction   
    
    task handle_leaf(input level, input [31:0] pte);
@@ -383,7 +384,7 @@ module mmu(
    wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
                (mem_request_enable)? mreq_wstrb:
                1'b0;       
-                  
+   
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
    always @(posedge clk) begin
       if(rstn) begin
