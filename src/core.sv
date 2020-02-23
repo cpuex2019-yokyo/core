@@ -407,18 +407,28 @@ module core
    
    wire                is_interrupted = intr_m_pending || intr_s_pending;
    
-   // thiese two wires should be used only when is_interrupted is asserted.
+   // these two wires should be used only when is_interrupted is asserted.
    wire [1:0]          next_cpu_mode_when_interrupted =
                        intr_m_pending? CPU_M:
-                       CPU_S;   
+                       CPU_S;
    
+   // NOTE: this signal covers following exception codes (priv 1.10 p.35):
+   // - 1: Supervisor software intterupt
+   // - 3: Machine software intterupt
+   // - 5: Supervisor timer interrupt
+   // - 7: Machine timer interrupt
+   // - 9: Supervisor external interrupt
+   // - 11: Machine external interrupt
+   // According to priv. v1.10 p.30, these are prioritized as follows:
+   // - order among different kinds of interrupts: external interrupts > software interrupts > timer interrupts
+   // - order among same kinds of interrupts: M > S (> U).   
    wire [31:0]         exception_vec_when_interrupted =
-                       (_mip[11] && _mie[11])? (_mideleg[11]? 32'd9 : 32'd11):
-                       (_mip[3] && _mie[3])? (_mideleg[3]? 32'd1 : 32'd3):
-                       (_mip[7] && _mie[7])? (_mideleg[7]? 32'd5 : 32'd7):
-                       (_mip[9] && _mie[9])? 32'd9:
-                       (_mip[1] && _mie[1])? 32'd1:
-                       (_mip[5] && _mie[5])? 32'd5:
+                       intr_m_pending? ((_mip[11] && _mie[11])? 32'd11:
+                                        (_mip[3] && _mie[3])? 32'd3:
+                                        (_mip[7] && _mie[7])? 32'd7):
+                       intr_s_pending? ((_mip[9] && _mie[9])? 32'd9:
+                                        (_mip[1] && _mie[1])? 32'd1:
+                                        (_mip[5] && _mie[5])? 32'd5):
                        32'd0;
 
    // exceptions
@@ -1186,6 +1196,7 @@ module core
             end else begin
                // [*] trap by exception (sync)
                // faulting address is pc.
+               // TODO: Do we have to care about simultaneous (synchronous) exceptions and interrupts?
                cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
                set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);               
                set_epc(next_cpu_mode_when_exception, pc);
