@@ -82,7 +82,8 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
    (* mark_debug = "true" *) reg [31:0]                   queue_sel;
    wire [31:0]                  queue_num_max = (queue_sel == 32'b0)? 32'd8 : 32'd0;
-   (* mark_debug = "true" *) reg [31:0]                   queue_num;
+   //(* mark_debug = "true" *) reg [31:0]                   queue_num;
+   (* mark_debug = "true" *) wire [31:0]                   queue_num = 32'h8;
    (* mark_debug = "true" *) reg [31:0]                   queue_align;
    (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
 
@@ -112,7 +113,7 @@ module virtio(
          guest_features <= 32'b0;
          guest_features_sel <= 32'b0;
          queue_sel <= 32'b0;
-         queue_num <= 32'b0;
+         //queue_num <= 32'b0;
          queue_align <= 32'b0;
          queue_pfn <= 32'b0;
          queue_ready <= 32'b0;
@@ -168,7 +169,7 @@ module virtio(
            32'h24: guest_features_sel <= data;
            32'h28: guest_page_size <= data;
            32'h30: queue_sel <= data;
-           32'h38: queue_num <= data;
+           //32'h38: queue_num <= data;
            32'h3c: queue_align <= data;
            32'h40: queue_pfn <= data;
            32'h50: queue_notify <= data;
