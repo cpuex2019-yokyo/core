@@ -983,6 +983,7 @@ module core
                   state <= EXEC_PRIV;
                   // no need to update *_enabled anymore
                   {is_csr_valid, csr_value} <= read_csr(instr_d_out.imm[11:0]);
+                  next_pc <= pc + 4;
                end else if (instr_d_out.rv32a) begin
                   if (register_d_out.rs1[1:0] == 2'b0) begin // if aligned
                      if (instr_d_out.sc) begin
@@ -1018,6 +1019,7 @@ module core
                         state <= EXEC_ATOM1;
                         mem_enabled <= 1;          
                      end
+                     next_pc <= pc + 4;
                   end else begin
                      state <= TRAP;            
                      raise_storeamo_address_misaligned(register_d_out.rs1);                     
