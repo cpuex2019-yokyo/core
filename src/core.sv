@@ -1036,32 +1036,50 @@ module core
          end else if (state == EXEC_ATOM1 && is_mem_done) begin   
             exec_enabled <= 0;
 
-            // start to store ... m -> (binop) -> m
-            // op tmp, rs2, rd -> sw tmp, (rs1)            
-            state <= EXEC_ATOM2;           
-            mem_enabled <= 1;                    
-            mem_arg <= instr.amoswap? register.rs2:
-                       instr.amoadd? mem_result + register.rs2:
-                       instr.amoand? mem_result & register.rs2:
-                       instr.amoor? mem_result | register.rs2:
-                       instr.amoxor? mem_result ^ register.rs2:
-                       instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
-                                      register.rs2):
-                       instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
-                                      mem_result):
-                       instr.amomaxu? (mem_result > register.rs2? mem_result:
-                                       register.rs2):
-                       instr.amominu? (mem_result > register.rs2? register.rs2:
-                                       mem_result):
-                       0;
+            if (mem_exception_enable) begin
+               state <= TRAP;               
+               raise_mem_exception();               
+            end else if (mmu_exception_enable) begin
+               state <= TRAP;
+               raise_mmu_exception();
+            end else begin
+               // start to store ... m -> (binop) -> m
+               // op tmp, rs2, rd -> sw tmp, (rs1)            
+               state <= EXEC_ATOM2;           
+               mem_enabled <= 1;                    
+               mem_arg <= instr.amoswap? register.rs2:
+                          instr.amoadd? mem_result + register.rs2:
+                          instr.amoand? mem_result & register.rs2:
+                          instr.amoor? mem_result | register.rs2:
+                          instr.amoxor? mem_result ^ register.rs2:
+                          instr.amomax? ($signed(mem_result) > $signed(register.rs2)? mem_result:
+                                         register.rs2):
+                          instr.amomin? ($signed(mem_result) > $signed(register.rs2)? register.rs2:
+                                         mem_result):
+                          instr.amomaxu? (mem_result > register.rs2? mem_result:
+                                          register.rs2):
+                          instr.amominu? (mem_result > register.rs2? register.rs2:
+                                          mem_result):
+                          0;
+               
+               // prepare to write ... m -> w
+               // here we do not enable write yet
+               data_to_write <= mem_result;
+            end
+         end else if (state == EXEC_ATOM2 && is_mem_done) begin // if (mmu_exception_enable)
+            mem_enabled <= 0;
             
-            // prepare to write ... m -> w
-            // here we do not enable write yet
-            data_to_write <= mem_result;
-         end else if (state == EXEC_ATOM2 && is_mem_done) begin
-            // start to write ... args are prepared when it leaves from EXEC_ATOM1
-            state <= WRITE;
-            write_enabled <= 1;
+            if (mem_exception_enable) begin
+               state <= TRAP;               
+               raise_mem_exception();               
+            end else if (mmu_exception_enable) begin
+               state <= TRAP;
+               raise_mmu_exception();
+            end else begin
+               // start to write ... args are prepared when it leaves from EXEC_ATOM1
+               state <= WRITE;
+               write_enabled <= 1;
+            end
          end else if (state == EXEC_PRIV) begin 
             exec_enabled <= 0;
             
