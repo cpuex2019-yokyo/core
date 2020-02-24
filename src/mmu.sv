@@ -315,6 +315,46 @@ module mmu(
             tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
          end
       end
+   endtask // set_tlb
+   
+   task invalidate_pte(input [31:0] vaddr);
+      begin
+         if (tlb_tag(tlb_table[0]) == vpn(vaddr)) begin
+            tlb_table[0][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[1]) == vpn(vaddr)) begin
+            tlb_table[1][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[1]) == vpn(vaddr)) begin
+            tlb_table[1][52] <= 1'b0;  
+         end else if (tlb_tag(tlb_table[2]) == vpn(vaddr)) begin
+            tlb_table[2][52] <= 1'b0; 
+         end else if (tlb_tag(tlb_table[3]) == vpn(vaddr)) begin
+            tlb_table[3][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[4]) == vpn(vaddr)) begin
+            tlb_table[4][52] <= 1'b0; 
+         end else if (tlb_tag(tlb_table[5]) == vpn(vaddr)) begin
+            tlb_table[5][52] <= 1'b0; 
+         end else if (tlb_tag(tlb_table[6]) == vpn(vaddr)) begin
+            tlb_table[6][52] <= 1'b0; 
+         end else if (tlb_tag(tlb_table[7]) == vpn(vaddr)) begin
+            tlb_table[7][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[8]) == vpn(vaddr)) begin
+            tlb_table[8][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[9]) == vpn(vaddr)) begin
+            tlb_table[9][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[10]) == vpn(vaddr)) begin
+            tlb_table[10][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[11]) == vpn(vaddr)) begin
+            tlb_table[11][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[12]) == vpn(vaddr)) begin
+            tlb_table[12][52] <= 1'b0;
+         end else if (tlb_tag(tlb_table[13]) == vpn(vaddr)) begin
+            tlb_table[13][52] <= 1'b0;  
+         end else if (tlb_tag(tlb_table[14]) == vpn(vaddr)) begin
+            tlb_table[14][52] <= 1'b0; 
+         end else if (tlb_tag(tlb_table[15]) == vpn(vaddr)) begin
+            tlb_table[15][52] <= 1'b0; 
+         end            
+      end  
    endtask
    
    function [52:0] tlb_entry(input [31:0] vaddr);
@@ -375,8 +415,7 @@ module mmu(
       begin
          should_dirty_set = cause == CAUSE_MEM && mode == MEMREQ_WRITE && (dirty_bit(pte) == 0);         
       end
-   endfunction
-   
+   endfunction // should_dirty_set
    
    task handle_leaf(input level, input [31:0] pte);
       begin
@@ -461,7 +500,8 @@ module mmu(
                   end else if ((!is_accessed(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode))
                                || should_dirty_set(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode)) begin
                      // v1.10.0 p.61
-                     // TODO: update 
+                     // TODO: update A&D by hardware as QEMU does
+                     invalidate_pte(_req_addr);
                      raise_pagefault_exception(5'd8, {access_bit(tlb_to_pte(tlb_entry(_req_addr))), 
                                                       _req_cause, 
                                                       _req_mode, 
