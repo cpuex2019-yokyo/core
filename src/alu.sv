@@ -204,7 +204,7 @@ module alu
                   completed <= 1;                  
                   result <= 32'b0;                  
                end else begin
-                  comleted <= 0;                  
+                  completed <= 0;                  
                   state <= MULDIV;
                   
                   div_enabled <= 1'b1;
