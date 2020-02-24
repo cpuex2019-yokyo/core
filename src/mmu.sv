@@ -410,7 +410,7 @@ module mmu(
             // note that req_* is invalid and so is _vaddr, _mode, _wdata, and _wstrb.            
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
-            operation_cause <= _req_cause;            
+            operation_cause <= _req_cause == CAUSE_FETCH? CAUSE_FETCH : CAUSE_MEM;            
             if (flush_tlb) begin
                clear_tlb();
                state <= WAITING_RECEIVE;               
