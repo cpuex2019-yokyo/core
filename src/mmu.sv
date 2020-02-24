@@ -352,18 +352,31 @@ module mmu(
          l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
       end  
    endfunction  
+   
+   function [0:0] access_bit (input [31:0] pte);
+      begin
+         access_bit = pte[6];
+      end
+   endfunction
 
+   function [0:0] dirty_bit (input [31:0] pte);
+      begin
+         dirty_bit = pte[7];
+      end
+   endfunction
+   
    function [0:0] is_accessed(input [31:0] pte, input cause, input mode);
       begin
-         is_accessed = pte[6];         
+         is_accessed = access_bit(pte);         
       end
    endfunction
 
    function [0:0] should_dirty_set(input [31:0] pte, input cause, input mode);
       begin
-         is_dirty = cause == CAUSE_MEM && mode == MEMREQ_WRITE && (pte[7] == 0);         
+         should_dirty_set = cause == CAUSE_MEM && mode == MEMREQ_WRITE && (dirty_bit(pte) == 0);         
       end
    endfunction
+   
    
    task handle_leaf(input level, input [31:0] pte);
       begin
@@ -377,11 +390,11 @@ module mmu(
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0},
                                       _mode, operation_cause, _vaddr);            
          end else begin
-            if (!is_accessed(pte, operation_cause, mode)
+            if (!is_accessed(pte, operation_cause, _mode)
                 || should_dirty_set(pte, operation_cause, _mode)) begin
                // v1.10.0 p.61
                // TODO: change implementation to update A bit on PTE
-               raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0}, 
+               raise_pagefault_exception(5'd3, {access_bit(pte), operation_cause, _mode, dirty_bit(pte), 23'b0}, 
                                          _mode, operation_cause, _vaddr);
             end else begin            
                state <= WAITING_RESPONSE;
@@ -445,14 +458,14 @@ module mmu(
                                                _req_mode,
                                                _req_cause,
                                                _req_addr);
-                  end else if (!is_accessed(tlb_entry(_req_addr), _req_cause, _req_mode)
-                               || should_dirty_set(pte, _req_cause, _req_mode)) begin
+                  end else if ((!is_accessed(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode))
+                               || should_dirty_set(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode)) begin
                      // v1.10.0 p.61
                      // TODO: update 
-                     raise_pagefault_exception(5'd8, {tlb_entry(_req_addr)[6], 
+                     raise_pagefault_exception(5'd8, {access_bit(tlb_to_pte(tlb_entry(_req_addr))), 
                                                       _req_cause, 
                                                       _req_mode, 
-                                                      tlb_entry(_req_addr)[7], 
+                                                      dirty_bit(tlb_to_pte(tlb_entry(_req_addr))), 
                                                       23'b0}, 
                                                _mode, _req_cause, _req_addr);                  
                   end else begin
