@@ -351,7 +351,19 @@ module mmu(
       begin
          l0_result = {ppn1(pte), ppn0(pte), voffset(vaddr)};
       end  
-   endfunction   
+   endfunction  
+
+   function [0:0] is_accessed(input [31:0] pte, input cause, input mode);
+      begin
+         is_accessed = pte[6];         
+      end
+   endfunction
+
+   function [0:0] should_dirty_set(input [31:0] pte, input cause, input mode);
+      begin
+         is_dirty = cause == CAUSE_MEM && mode == MEMREQ_WRITE && (pte[7] == 0);         
+      end
+   endfunction
    
    task handle_leaf(input level, input [31:0] pte);
       begin
@@ -365,8 +377,8 @@ module mmu(
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0},
                                       _mode, operation_cause, _vaddr);            
          end else begin
-            if (pte[6] == 0 
-                || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
+            if (!is_accessed(pte, operation_cause, mode)
+                || should_dirty_set(pte, operation_cause, _mode)) begin
                // v1.10.0 p.61
                // TODO: change implementation to update A bit on PTE
                raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0}, 
@@ -425,21 +437,31 @@ module mmu(
                req_addr <= _req_addr;
             end else begin
                if (tlb_valid(tlb_entry(_req_addr))) begin
-                  if (has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
-                                     _req_cause,
-                                     _req_mode,
-                                     _req_cpu_mode)) begin
+                  if (!has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
+                                      _req_cause,
+                                      _req_mode,
+                                      _req_cpu_mode)) begin
+                     raise_pagefault_exception(5'd7, {tlb_flags(tlb_entry(_req_addr)), 17'b0}, 
+                                               _req_mode,
+                                               _req_cause,
+                                               _req_addr);
+                  end else if (!is_accessed(tlb_entry(_req_addr), _req_cause, _req_mode)
+                               || should_dirty_set(pte, _req_cause, _req_mode)) begin
+                     // v1.10.0 p.61
+                     // TODO: update 
+                     raise_pagefault_exception(5'd8, {tlb_entry(_req_addr)[6], 
+                                                      _req_cause, 
+                                                      _req_mode, 
+                                                      tlb_entry(_req_addr)[7], 
+                                                      23'b0}, 
+                                               _mode, _req_cause, _req_addr);                  
+                  end else begin
                      state <= WAITING_RESPONSE;
                      request_enable <= 1'b1;
                      req_mode <= _req_mode;
                      req_wdata <= _req_wdata;
                      req_wstrb <= _req_wstrb;
                      req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
-                  end else begin
-                     raise_pagefault_exception(5'd4, {tlb_flags(tlb_entry(_req_addr)), 17'b0}, 
-                                               _req_mode,
-                                               _req_cause,
-                                               _req_addr);
                      
                      // raise_accessfault_exception((fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM,
                      //                             _req_mode,
