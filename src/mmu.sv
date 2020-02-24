@@ -64,6 +64,7 @@ module mmu(
    (* mark_debug = "true" *) reg                       _mode;
    (* mark_debug = "true" *) reg [31:0]                _wdata;
    (* mark_debug = "true" *) reg [3:0]                 _wstrb;   
+   (* mark_debug = "true" *) reg [1:0]                 _cpu_mode;   
    
    wire [31:0]               resp_data_le = to_le32(resp_data);
    
@@ -116,16 +117,23 @@ module mmu(
    endfunction // ppn0
 
    (* mark_debug = "true" *) reg [31:0] exception_intl_cause;
-   
-   task raise_pagefault_exception(input [4:0] intl_cause, input [26:0] debug_info);
+
+   // this assumes to be called after receiving request.
+   // operation_cause, _mode, _vaddr should be initialized!
+   task raise_pagefault_exception(input [4:0] intl_cause, 
+                                  input [26:0] debug_info, 
+                                  input        mode, 
+                                  input        cause, 
+                                  input [31:0] vaddr);
       begin
          exception_enable <= 1'b1;         
-         exception_vec <= _mode == MEMREQ_READ? 5'd13: // load page fault
+         exception_vec <= mode == MEMREQ_READ? 5'd13: // load page fault
                           5'd15; // store/amo page fault
-         exception_tval <= _vaddr;
+         exception_tval <= vaddr;
          exception_intl_cause <= {debug_info, intl_cause};         
          state <= WAITING_RECEIVE;
-         if (operation_cause == CAUSE_FETCH) begin
+         
+         if (cause == CAUSE_FETCH) begin
             fetch_response_enable <= 1'b1;               
             fresp_data <= resp_data;
          end else begin
@@ -135,22 +143,24 @@ module mmu(
       end
    endtask // raise_pagefault_exception
 
-   task raise_accessfault_exception;
-      begin
-         exception_enable <= 1'b1;
-         exception_vec <= _mode == MEMREQ_READ? 5'd5: // load access fault
-                          5'd7; // store/amo access fault
-         exception_tval <= _vaddr;
-         state <= WAITING_RECEIVE;
-         if (operation_cause == CAUSE_FETCH) begin
-            fetch_response_enable <= 1'b1;               
-            fresp_data <= resp_data;
-         end else begin
-            mem_response_enable <= 1'b1;               
-            mresp_data <= resp_data;
-         end
-      end
-   endtask
+   // task raise_accessfault_exception(input cause, input mode, input [31:0] vaddr, input [26:0] debug_info);
+   //    begin
+   //       exception_enable <= 1'b1;
+   //       exception_vec <= mode == MEMREQ_READ? 5'd5: // load access fault
+   //                        5'd7; // store/amo access fault
+   //       exception_tval <= vaddr;
+   //       exception_intl_cause <= {debug_info, 5'd7};         
+   //       state <= WAITING_RECEIVE;
+         
+   //       if (cause == CAUSE_FETCH) begin
+   //          fetch_response_enable <= 1'b1;               
+   //          fresp_data <= resp_data;
+   //       end else begin
+   //          mem_response_enable <= 1'b1;               
+   //          mresp_data <= resp_data;
+   //       end
+   //    end
+   // endtask
    
    // privilege checker
    ///////////////////
@@ -200,6 +210,7 @@ module mmu(
          _wdata <= 32'b0;
          _wstrb <= 32'b0;
          _vaddr <= 32'b0;
+         _cpu_mode <= 2'b0;         
          
          exception_vec <= 5'b0;
          exception_tval <= 32'b0;
@@ -347,16 +358,19 @@ module mmu(
          if (!has_permission(pte, 
                              operation_cause, 
                              _mode, 
-                             (operation_cause == CAUSE_FETCH? actual_cpu_mode : mprv_cpu_mode))) begin
-            raise_pagefault_exception(5'd1, 27'd0);
+                             _cpu_mode)) begin
+            raise_pagefault_exception(5'd1, 27'd0, 
+                                      _mode, operation_cause, _vaddr);
          end else if (level > 0 && ppn0(pte) != 10'b0) begin
-            raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0});            
+            raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0},
+                                      _mode, operation_cause, _vaddr);            
          end else begin
             if (pte[6] == 0 
                 || (operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE && (pte[7] == 0))) begin
                // v1.10.0 p.61
                // TODO: change implementation to update A bit on PTE
-               raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0});
+               raise_pagefault_exception(5'd3, {pte[6], operation_cause, _mode, pte[7], 23'b0}, 
+                                         _mode, operation_cause, _vaddr);
             end else begin            
                state <= WAITING_RESPONSE;
                req_mode <= _mode;
@@ -383,21 +397,26 @@ module mmu(
                1'b0;
    wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
                (mem_request_enable)? mreq_wstrb:
-               1'b0;       
+               1'b0;
+   wire _req_cause = (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;
+   wire [1:0] _req_cpu_mode = fetch_request_enable? actual_cpu_mode : mprv_cpu_mode;
+   
    
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
    always @(posedge clk) begin
       if(rstn) begin
          if (state == WAITING_REQUEST && (fetch_request_enable | mem_request_enable)) begin
+            // in this state, _req_* is valid.
+            // note that req_* is invalid and so is _vaddr, _mode, _wdata, and _wstrb.            
             exception_vec <= 5'b0;
             exception_enable <= 1'b0;
-            operation_cause <= (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;            
+            operation_cause <= _req_cause;            
             if (flush_tlb) begin
                clear_tlb();
-               state <= WAITING_RECEIVE;            
+               state <= WAITING_RECEIVE;               
                mem_response_enable <= 1'b1;               
             end else if (paging_mode == 0 
-                         || (fetch_request_enable? actual_cpu_mode : mprv_cpu_mode) == CPU_M) begin
+                         || _req_cpu_mode == CPU_M) begin
                state <= WAITING_RESPONSE;
                request_enable <= 1'b1;
                req_mode <= _req_mode;
@@ -407,9 +426,9 @@ module mmu(
             end else begin
                if (tlb_valid(tlb_entry(_req_addr))) begin
                   if (has_permission(tlb_to_pte(tlb_entry(_req_addr)), 
-                                     (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM, 
+                                     _req_cause,
                                      _req_mode,
-                                     (fetch_request_enable? actual_cpu_mode : mprv_cpu_mode))) begin
+                                     _req_cpu_mode)) begin
                      state <= WAITING_RESPONSE;
                      request_enable <= 1'b1;
                      req_mode <= _req_mode;
@@ -417,23 +436,35 @@ module mmu(
                      req_wstrb <= _req_wstrb;
                      req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
                   end else begin
-                     raise_accessfault_exception();
+                     raise_pagefault_exception(5'd4, {tlb_flags(tlb_entry(_req_addr)), 17'b0}, 
+                                               _req_mode,
+                                               _req_cause,
+                                               _req_addr);
+                     
+                     // raise_accessfault_exception((fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM,
+                     //                             _req_mode,
+                     //                             _req_addr,
+                     //                             {tlb_flags(tlb_entry(_req_addr)), 17'b0});
                   end
                end else begin
                   state <= FETCHING_FIRST_PTE;
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
-                  req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(_req_addr) * 4;            
+                  req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(_req_addr) * 4;
+
+                  // backup of original request for address translation
                   _vaddr <= _req_addr;
                   _mode <= _req_mode;
                   _wdata <= _req_wdata;
                   _wstrb <= _req_wstrb;
+                  _cpu_mode <= _req_cpu_mode;
                end
             end
          end else if (state == FETCHING_FIRST_PTE && response_enable) begin
             if (resp_data_le[0] == 0 
                 || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
-               raise_pagefault_exception(5'd4, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0});               
+               raise_pagefault_exception(5'd4, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0},
+                                         _mode, operation_cause, _vaddr);
             end else begin
                if (resp_data_le[1] == 1 || resp_data_le[3] == 1) begin
                   // PTE seems to be a leaf node.
@@ -448,13 +479,15 @@ module mmu(
             end
          end else if (state == FETCHING_SECOND_PTE && response_enable) begin
             if (resp_data_le[0] == 0 || (resp_data_le[1] == 0 && resp_data_le[2] == 1)) begin
-               raise_pagefault_exception(5'd5, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0});               
+               raise_pagefault_exception(5'd5, {resp_data_le[0], resp_data_le[1], resp_data_le[2], 24'b0},
+                                         _mode, operation_cause, _vaddr);               
             end else begin
                if (resp_data_le[1] == 1 || resp_data_le[3] == 1) begin
                   // PTE seems to be a leaf node.
                   handle_leaf(0, resp_data_le);                  
                end else begin
-                  raise_pagefault_exception(5'd6, {resp_data_le[1], resp_data_le[3], 25'b0});               
+                  raise_pagefault_exception(5'd6, {resp_data_le[1], resp_data_le[3], 25'b0},
+                                            _mode, operation_cause, _vaddr);               
                end
             end
          end else if (state == WAITING_RESPONSE && response_enable) begin
