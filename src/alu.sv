@@ -13,15 +13,15 @@ module alu
    output reg [31:0] result);
 
 
-   enum reg [2:0] {WAITING, MULDIV} state;
+   enum reg [2:0]    {WAITING, MULDIV} state;
 
    //div & mul module
-   reg            mul_enabled;   
-   wire           mul_completed;   
-   reg            mul_is_signed;   
-   reg [31:0]     mul_op1;
-   reg [31:0]     mul_op2;
-   wire [31:0]    mul_result;
+   reg               mul_enabled;   
+   wire              mul_completed;   
+   reg               mul_is_signed;   
+   reg [31:0]        mul_op1;
+   reg [31:0]        mul_op2;
+   wire [31:0]       mul_result;
    mul _mul(.clk(clk),
             .enable(mul_enabled),
             .completed(mul_completed),
@@ -30,13 +30,13 @@ module alu
             .t(mul_op2),
             .d(mul_result));
    
-   reg            div_enabled;   
-   wire           div_completed;   
-   reg            div_is_signed;   
-   reg [31:0]     div_dividend;
-   reg [31:0]     div_divisor;   
-   wire [31:0]    div_quotient;
-   wire [31:0]    div_remainder;   
+   reg               div_enabled;   
+   wire              div_completed;   
+   reg               div_is_signed;   
+   reg [31:0]        div_dividend;
+   reg [31:0]        div_divisor;   
+   wire [31:0]       div_quotient;
+   wire [31:0]       div_remainder;   
    div _div(.clk(clk),
             .enable(div_enabled),
             .completed(div_completed),
@@ -47,6 +47,9 @@ module alu
             .r(div_remainder));
 
    // tmp module
+   wire [63:0]       mul_temp = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({{32{register.rs2[31]}}, register.rs2});
+   wire [63:0]       mul_temp_hsu = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({32'b0, register.rs2});
+   wire [63:0]       mul_temp_hu = $signed({32'b0, register.rs1}) * $signed({32'b0, register.rs2});
    wire [63:0]       _extended_rs1 = {{32{register.rs1[31]}}, register.rs1};
    wire [63:0]       _tmp_srai = _extended_rs1 >> instr.imm[4:0];
    wire [63:0]       _tmp_sra = _extended_rs1 >> register.rs2[4:0];
@@ -216,7 +219,7 @@ module alu
                end else begin
                   comleted <= 0;                  
                   state <= MULDIV;    
-              
+                  
                   div_enabled <= 1'b1;
                   div_is_signed <= 1'b0;
                   div_dividend <= register.rs1;
