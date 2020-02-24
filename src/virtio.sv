@@ -101,7 +101,7 @@ module virtio(
 
    (* mark_debug = "true" *) reg [31:0] _addr;
    (* mark_debug = "true" *) reg [31:0] _data;   
-   (* mark_debug = "true" *) reg [3:0]  _wstrb;   
+   (* mark_debug = "true" *) reg [3:0]  _wstrb;  
    
    // mmio interface
    ///////////////////////
@@ -260,6 +260,7 @@ module virtio(
    // idx cache
    (* mark_debug = "true" *) reg [15:0] avail_idx;
    (* mark_debug = "true" *) reg [15:0] used_idx;
+   wire [31:0]                  used_idx_minus1 = used_idx - 1;
    
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
@@ -797,7 +798,7 @@ module virtio(
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= to_le32({16'b0, first_idx});
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + {(used_idx-1)[2:0], 3'b0};
+               mem_addr <= used_head + 4 + {used_idx_minus1[2:0], 3'b0};
             end
          end else if (notify_microstate == NOTIFY_WAITING2) begin
             mem_request_enable <= 1'b0;                 
@@ -808,7 +809,7 @@ module virtio(
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= 32'b0; // TODO(linux): set appropriate value
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + {((used_idx-1)[2:0], 3'b0} + 4;
+               mem_addr <= used_head + 4 + {used_idx_minus1[2:0], 3'b0} + 4;
             end
          end else if (notify_microstate == NOTIFY_WAITING3) begin
             mem_request_enable <= 1'b0;                 
