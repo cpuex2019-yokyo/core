@@ -113,7 +113,7 @@ module core
    wire               _mstatus_mpie = _mstatus[7];
    wire               _mstatus_spp = _mstatus[8];
    wire               _mstatus_spie = _mstatus[5];   
-   wire [31:0]        _mstatus_mask = 32'h601e79aa;   
+   wire [31:0]        _mstatus_mask = 32'h601e19aa;   
    task write_mstatus (input [31:0] value);
       begin
          _mstatus <= (_mstatus & ~(_mstatus_mask)) | (value & _mstatus_mask);         
