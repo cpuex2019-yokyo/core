@@ -82,8 +82,8 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
    (* mark_debug = "true" *) reg [31:0]                   queue_sel;
    wire [31:0]                  queue_num_max = (queue_sel == 32'b0)? 32'd8 : 32'd0;
+   // We fix queue_num by 8 for speedup!
    //(* mark_debug = "true" *) reg [31:0]                   queue_num;
-   (* mark_debug = "true" *) wire [31:0]                   queue_num = 32'h8;
    (* mark_debug = "true" *) reg [31:0]                   queue_align;
    (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
 
@@ -263,7 +263,7 @@ module virtio(
    
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
-   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
+   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {28'd8, 4'b0};
    wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);
 
    // loaded data
@@ -285,14 +285,14 @@ module virtio(
             desc.addr[63:32] <= 32'b0;
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;                  
-            mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 0;
+            mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 0;
          end else if (load_desc_microstate == 1) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 2;
                desc.addr[31:0] <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 8;               
+               mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 8;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -302,7 +302,7 @@ module virtio(
                desc.len <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 12;               
+               mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 12;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -797,7 +797,7 @@ module virtio(
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= to_le32({16'b0, first_idx});
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + 8 * ((used_idx-1) % queue_num);
+               mem_addr <= used_head + 4 + {(used_idx-1)[2:0], 3'b0};
             end
          end else if (notify_microstate == NOTIFY_WAITING2) begin
             mem_request_enable <= 1'b0;                 
@@ -808,7 +808,7 @@ module virtio(
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= 32'b0; // TODO(linux): set appropriate value
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + 8 * ((used_idx-1) % queue_num) + 4;
+               mem_addr <= used_head + 4 + {((used_idx-1)[2:0], 3'b0} + 4;
             end
          end else if (notify_microstate == NOTIFY_WAITING3) begin
             mem_request_enable <= 1'b0;                 
@@ -904,7 +904,7 @@ module virtio(
 
                   mem_request_enable <= 1;
                   mem_mode <= MEMREQ_READ;            
-                  mem_addr <= avail_head + 4 + 2 * (used_idx % queue_num);    
+                  mem_addr <= avail_head + 4 + {used_idx[2:0], 1'b0};    
                end else begin
                   controller_state <= RAISE_IRQ;
                end
