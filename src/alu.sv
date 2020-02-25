@@ -12,73 +12,74 @@ module alu
    output reg        completed,
    output reg [31:0] result);
 
+
+   enum reg [2:0]    {WAITING, MULDIV} state;
+
+   //div & mul module
+   reg               mul_enabled;   
+   wire              mul_completed;   
+   reg               mul_is_signed;   
+   reg [31:0]        mul_op1;
+   reg [31:0]        mul_op2;
+   wire [31:0]       mul_result;
+   mul _mul(.clk(clk),
+            .enable(mul_enabled),
+            .completed(mul_completed),
+            .is_signed(mul_is_signed),
+            .s(mul_op1),
+            .t(mul_op2),
+            .d(mul_result));
+   
+   reg               div_enabled;   
+   wire              div_completed;   
+   reg               div_is_signed;   
+   reg [31:0]        div_dividend;
+   reg [31:0]        div_divisor;   
+   wire [31:0]       div_quotient;
+   wire [31:0]       div_remainder;   
+   div _div(.clk(clk),
+            .enable(div_enabled),
+            .completed(div_completed),
+            .is_signed(div_is_signed),
+            .s(div_dividend),
+            .t(div_divisor),
+            .q(div_quotient),
+            .r(div_remainder));
+
+   // tmp module
    wire [63:0]       mul_temp = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({{32{register.rs2[31]}}, register.rs2});
    wire [63:0]       mul_temp_hsu = $signed({{32{register.rs1[31]}}, register.rs1}) * $signed({32'b0, register.rs2});
    wire [63:0]       mul_temp_hu = $signed({32'b0, register.rs1}) * $signed({32'b0, register.rs2});
-
    wire [63:0]       _extended_rs1 = {{32{register.rs1[31]}}, register.rs1};
    wire [63:0]       _tmp_srai = _extended_rs1 >> instr.imm[4:0];
    wire [63:0]       _tmp_sra = _extended_rs1 >> register.rs2[4:0];
 
-   function [31:0] abs32(input [31:0] v);
+   // init utility
+   task init;
       begin
-         abs32 = v[31] ? (~v + 32'b1) :
-                 v;         
-      end
-   endfunction
+         state <= WAITING;
 
-   function [31:0] u32_to_s32(input sign, input [31:0] v);
-      begin
-         u32_to_s32 = sign? ~v + 32'b1:
-                      v;         
+         mul_enabled <= 1'b0;
+         mul_is_signed <= 1'b0;
+         mul_op1 <= 32'b0;
+         mul_op2 <= 32'b0;         
+         
+         div_enabled <= 1'b0;
+         div_is_signed <= 1'b0;
+         div_dividend <= 32'b0;
+         div_divisor <= 32'b1;         
       end
-   endfunction
+   endtask  
 
-   function [31:0] divu32(input [31:0] dividend, input [31:0] divisor);
+   task be_quiet;      
       begin
-         if (divisor == 32'b0) begin
-            divu32 = (~32'b0);
-         end else begin
-            divu32 = dividend / divisor;
-         end
+         completed <= 0;
+         mul_enabled <= 1'b0;            
+         div_enabled <= 1'b0;
       end
-   endfunction 
-   
-   function [31:0] div32(input [31:0] dividend, input [31:0] divisor);
-      begin
-         if (divisor == 32'b0) begin
-            div32 = (~32'b0);
-         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
-            div32 = dividend;
-         end else begin   
-            div32 = u32_to_s32(dividend[31] ^ divisor[31], divu32(abs32(dividend), abs32(divisor)));            
-         end
-      end
-   endfunction
-   
-   function [31:0] remu32(input [31:0] dividend, input [31:0] divisor);
-      begin
-         if (divisor == 32'b0) begin
-            remu32 = dividend;
-         end else begin
-            remu32 = dividend % divisor;
-         end
-      end
-   endfunction
-   
-   function [31:0] rem32(input [31:0] dividend, input [31:0] divisor);
-      begin
-         if (divisor == 32'b0) begin
-            rem32 = dividend;            
-         end else if (dividend == 32'h80000000 && divisor == ~(32'b0)) begin
-            rem32 = 32'b0;
-         end else begin   
-            rem32 = u32_to_s32(dividend[31], remu32(abs32(dividend), abs32(divisor)));            
-         end
-      end
-   endfunction
+   endtask    
 
-   
+   // main logic
    wire [31:0]       _result =
                      instr.lui? instr.imm:
                      instr.auipc? $signed(instr.imm) + instr.pc:
@@ -134,15 +135,15 @@ module alu
                      instr.csrrci? 32'b0: // will be handed in core.sv
                      ///// rv32m /////
                      // TODO: seems to be buggy; not fully tested yet.
+                     // zero division does not cause any exceptions in RISC-V
                      instr.mul? mul_temp[31:0]:
                      instr.mulh? mul_temp[63:32]:
                      instr.mulhsu? mul_temp_hsu[63:32]:
                      instr.mulhu? mul_temp_hu[63:32]:
-                     // zero division does not cause any exceptions in RISC-V
-                     instr.div? div32(register.rs1, register.rs2):
-                     instr.rem? rem32(register.rs1, register.rs2):
-                     instr.divu? divu32(register.rs1, register.rs2):
-                     instr.remu? remu32(register.rs1, register.rs2):
+                     // instr.div? div32(register.rs1, register.rs2):
+                     // instr.rem? rem32(register.rs1, register.rs2):
+                     // instr.divu? divu32(register.rs1, register.rs2):
+                     // instr.remu? remu32(register.rs1, register.rs2):
                      ///// rv32m /////
                      instr.amoswap? 32'b0: // will be handed in core.sv
                      instr.amoand? 32'b0: // will be handed in core.sv
@@ -161,16 +162,99 @@ module alu
 
    always @(posedge clk) begin
       if (rstn) begin
-         if (enabled) begin
-            result <= _result;
-            completed <= 1;
-         end else begin
-            completed <= 0;
+         if (state == WAITING && enabled) begin
+            if (instr.mul | instr.mulh | instr.mulhsu | instr.mulhu) begin
+               // TODO: use mul module and completed <= 0
+               completed <= 1;
+               result <= _result;
+            end else if (instr.div) begin
+               if (register.rs2 == 32'b0) begin
+                  completed <= 1;
+                  result <= (~32'b0);
+               end else if (register.rs1 == 32'h80000000 && register.rs2 == ~(32'b0)) begin
+                  completed <= 1;                  
+                  result <= register.rs1;
+               end else begin
+                  completed <= 0;
+                  state <= MULDIV;
+                  
+                  div_enabled <= 1'b1;
+                  div_is_signed <= 1'b1;
+                  div_dividend <= register.rs1;
+                  div_divisor <= register.rs2;                  
+               end               
+            end else if (instr.divu) begin
+               if (register.rs2 == 32'b0) begin
+                  completed <= 1;
+                  result <= (~32'b0);
+               end else begin
+                  completed <= 0;                  
+                  state <= MULDIV;
+                  
+                  div_enabled <= 1'b1;
+                  div_is_signed <= 1'b0;
+                  div_dividend <= register.rs1;
+                  div_divisor <= register.rs2;                  
+               end               
+            end else if (instr.rem) begin
+               if (register.rs2 == 32'b0) begin
+                  completed <= 1;
+                  result <= register.rs1;
+               end else if (register.rs1 == 32'h80000000 && register.rs2 == ~(32'b0)) begin
+                  completed <= 1;                  
+                  result <= 32'b0;                  
+               end else begin
+                  completed <= 0;                  
+                  state <= MULDIV;
+                  
+                  div_enabled <= 1'b1;
+                  div_is_signed <= 1'b1;
+                  div_dividend <= register.rs1;
+                  div_divisor <= register.rs2;                  
+               end               
+            end else if (instr.remu) begin // if (instr.rem)
+               if (register.rs2 == 32'b0) begin
+                  completed <= 1;
+                  result <= register.rs1;                  
+               end else begin
+                  completed <= 0;                  
+                  state <= MULDIV;    
+                  
+                  div_enabled <= 1'b1;
+                  div_is_signed <= 1'b0;
+                  div_dividend <= register.rs1;
+                  div_divisor <= register.rs2;
+               end                              
+            end else begin 
+               // for rv32iasu instructions, _result is the result.
+               completed <= 1;               
+               result <= _result;
+            end
+         end else if (state == MULDIV) begin // else: !if(state == WAITING && enabled)
+            if (div_completed) begin
+               completed <= 1'b1;          
+               state <= WAITING;
+               
+               if (instr.div | instr.divu) begin
+                  result <= div_quotient;                  
+               end else if (instr.rem | instr.remu) begin
+                  result <= div_remainder;                  
+               end
+            end else if (mul_completed) begin
+               completed <= 1'b1;               
+               state <= WAITING;
+               
+               // TODO: setting result appropriately
+               // result <= ...
+            end else begin
+               be_quiet();            
+            end
+         end else begin // if (state == MULDIV)
+            be_quiet();            
          end
       end else begin
-         completed <= 0;
+         init();         
       end
    end
-
 endmodule
 `default_nettype wire
