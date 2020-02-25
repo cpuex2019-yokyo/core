@@ -12,7 +12,7 @@ module div_stage #(
                       output wire [63:0] t_next,
                       output wire [31:0] q_next,
                       output wire        ssign_next,
-                      ou tput wire tsign_next
+                      output wire tsign_next
                       );
 
    wire [63:0]                           s_array [4:0];
