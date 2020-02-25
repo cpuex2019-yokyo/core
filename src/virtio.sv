@@ -402,13 +402,13 @@ module virtio(
    task spi_command();
       begin
          spi_phase <= spi_phase + 8'h1;
-         if(spi_phase == 8'hf9) begin
+         if(spi_phase == 8'hf8) begin
             m_spi_awaddr <= 32'h60;
             m_spi_wdata <= 32'h1e6;
-         end else if(spi_phase == 8'hfa || spi_phase == 8'hfb) begin
+         end else if(spi_phase == 8'hf9 || spi_phase == 8'hfa) begin
             m_spi_awaddr <= 32'h70;
             m_spi_wdata <= 32'h1;
-         end else if(spi_phase == 8'hfc) begin
+         end else if(spi_phase == 8'hfb) begin
             m_spi_awaddr <= 32'h68;
             if(spi_mode == SPI_PREPARE) begin
                m_spi_wdata <= 32'h06;
@@ -417,20 +417,22 @@ module virtio(
             end else if(spi_mode == SPI_ERASE) begin
                m_spi_wdata <= 32'h20;
             end else if(spi_mode == SPI_PROGRAM) begin
-               m_spi_wdata <= 32'h02;
+               m_spi_wdata <= 32'h12;
             end else if(spi_mode == SPI_WIP) begin
                m_spi_wdata <= 32'h05;
             end else if(spi_mode == SPI_READ) begin
-               m_spi_wdata <= 32'h03;
+               m_spi_wdata <= 32'h13;
             end
-         end else if(spi_phase == 8'hfd) begin
+         end else if(spi_phase == 8'hfc) begin
             if(spi_mode == SPI_WIP) begin
                m_spi_wdata <= 32'hff;
                spi_state <= SPI_STATE_ENABLE;
                spi_phase <= 32'h0;
             end else begin
-               m_spi_wdata <= {24'h0, outhdr.sector[14:7]};
+               m_spi_wdata <= {24'h0, outhdr.sector[22:15]};
             end
+         end else if(spi_phase == 8'hfd) begin
+            m_spi_wdata <= {24'h0, outhdr.sector[14:7]};
          end else if(spi_phase == 8'hfe) begin
             m_spi_wdata <= {24'h0, outhdr.sector[6:0], spi_rep[1]};
          end else if(spi_phase == 8'hff) begin
@@ -475,7 +477,7 @@ module virtio(
                      spi_state <= SPI_STATE_WIP;
                   end else if(spi_mode == SPI_READ) begin
                      spi_state <= SPI_STATE_READ;
-                     spi_phase <= 8'hfc;
+                     spi_phase <= 8'hfb;
                      m_spi_arvalid <= 1'b1;
                      m_spi_rready <= 1'b1;
                      m_spi_araddr <= 32'h6c;
@@ -505,7 +507,7 @@ module virtio(
             m_spi_awaddr <= 32'h20;
             m_spi_wdata <= 32'h4;
             spi_state <= SPI_STATE_COMMAND;
-            spi_phase <= 8'hfc;
+            spi_phase <= 8'hfb;
             if(spi_mode == SPI_PREPARE) begin
                if(spi_prepare_state == 2'h0) begin
                   spi_mode <= SPI_READ;
@@ -609,7 +611,7 @@ module virtio(
          if (startup) begin
             spi_mode <= SPI_PREPARE;
             spi_state <= SPI_STATE_COMMAND;   
-            spi_phase <= 8'hf9;
+            spi_phase <= 8'hf8;
             spi_rep <= 2'h0;
             spi_prepare_state <= 2'h0;
             spi_wenable <= 1'b1;
@@ -632,7 +634,7 @@ module virtio(
          if (startup) begin
             spi_mode <= SPI_PREPARE;
             spi_state <= SPI_STATE_COMMAND;   
-            spi_phase <= 8'hf9;
+            spi_phase <= 8'hf8;
             spi_rep <= 2'h0;
             spi_prepare_state <= 2'h1;
             spi_wenable <= 1'b1;
