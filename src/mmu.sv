@@ -216,6 +216,8 @@ module mmu(
          exception_tval <= 32'b0;
          exception_enable <= 1'b0;         
          exception_intl_cause <= 32'd0;
+
+         update_index <= 4'b0;         
          
          state <= WAITING_REQUEST;
          clear_tlb();         
@@ -274,6 +276,7 @@ module mmu(
       end
    endtask
 
+   reg [3:0] update_index;   
    task set_tlb(input [31:0] vaddr, input [33:0] paddr, input [9:0] flags);
       begin
          if (tlb_valid(tlb_entry(vaddr))) begin
@@ -312,7 +315,8 @@ module mmu(
             tlb_table[15] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
          end else begin
             // TODO: should be replaced with a better algorithm!
-            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
+            update_index <= update_index + 4'b1;            
+            tlb_table[update_index] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
          end
       end
    endtask // set_tlb
