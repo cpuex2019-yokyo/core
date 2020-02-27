@@ -593,7 +593,7 @@ module mmu(
                      req_wstrb <= 4'b1111;
                      req_wdata <= tlb_to_pte(tlb_entry(_req_addr)) | {22'b0, // phys addr
                                                                       2'b00, // rsw
-                                                                      cause == CAUSE_MEM && mode == MEMREQ_WRITE, // dirty
+                                                                      _req_cause == CAUSE_MEM && _req_mode == MEMREQ_WRITE, // dirty
                                                                       1'b1, // accessed
                                                                       6'b0};                     
                   end else begin
