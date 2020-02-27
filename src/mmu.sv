@@ -181,8 +181,11 @@ module mmu(
 
    function [0:0] is_appropriate_operation(input [31:0] pte, input cause, input mode);
       begin
+         // pte[1] ... R bit
+         // pte[2] ... W bit
+         // pte[3] ... X bit
          is_appropriate_operation = ((cause == CAUSE_FETCH && pte[3])
-                                     || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && pte[1]) 
+                                     || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && (mxr? (pte[1] || pte[3]) : pte[1])) 
                                                                 || (mode == MEMREQ_WRITE && pte[2]))));
       end
    endfunction // is_appropriate_operation
