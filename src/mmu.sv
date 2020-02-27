@@ -344,8 +344,6 @@ module mmu(
       end
    endtask // set_tlb
 
-   task 
-   
    task invalidate_pte(input [31:0] vaddr);
       begin
          if (tlb_tag(tlb_table[0]) == vpn(vaddr)) begin
