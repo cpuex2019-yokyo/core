@@ -192,13 +192,13 @@ module alu
 
                if (instr.mul | instr.mulh) begin
                   mul_op1 <= register.rs1;
-                  is_signed <= 1;                  
+                  mul_is_signed <= 1;                  
                end else if (instr.mulhsu) begin
                   mul_op1 <= abs32(register.rs1);                  
-                  is_signed <= 0;                  
+                  mul_is_signed <= 0;                  
                end else if (instr.mulhu) begin
                   mul_op1 <= register.rs1;                  
-                  is_signed <= 0;                  
+                  mul_is_signed <= 0;                  
                end 
                mul_op2 <= register.rs2;               
             end else if (instr.div) begin
