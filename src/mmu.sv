@@ -153,7 +153,7 @@ module mmu(
    //       exception_tval <= vaddr;
    //       exception_intl_cause <= {debug_info, 5'd7};         
    //       state <= WAITING_RECEIVE;
-         
+   
    //       if (cause == CAUSE_FETCH) begin
    //          fetch_response_enable <= 1'b1;               
    //          fresp_data <= resp_data;
@@ -408,23 +408,23 @@ module mmu(
 
    function [31:0] tlb_entry_addr(input [31:0] vaddr);
       begin 
-         tlb_entry = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_addr_table[0]:
-                     tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_addr_table[1]:                             
-                     tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_addr_table[2]:                             
-                     tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_addr_table[3]:                             
-                     tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_addr_table[4]:                             
-                     tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_addr_table[5]:                             
-                     tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_addr_table[6]:                             
-                     tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_addr_table[7]:                             
-                     tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_addr_table[8]:                             
-                     tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_addr_table[9]:                             
-                     tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_addr_table[10]:                             
-                     tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_addr_table[11]:                             
-                     tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_addr_table[12]:                             
-                     tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_addr_table[13]:                             
-                     tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_addr_table[14]:                             
-                     tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_addr_table[15]:
-                     32'b0;
+         tlb_entry_addr = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_addr_table[0]:
+                          tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_addr_table[1]:                             
+                          tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_addr_table[2]:                             
+                          tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_addr_table[3]:                             
+                          tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_addr_table[4]:                             
+                          tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_addr_table[5]:                             
+                          tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_addr_table[6]:                             
+                          tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_addr_table[7]:                             
+                          tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_addr_table[8]:                             
+                          tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_addr_table[9]:                             
+                          tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_addr_table[10]:                             
+                          tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_addr_table[11]:                             
+                          tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_addr_table[12]:                             
+                          tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_addr_table[13]:                             
+                          tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_addr_table[14]:                             
+                          tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_addr_table[15]:
+                          32'b0;
       end
    endfunction
    
@@ -494,7 +494,7 @@ module mmu(
             if (!is_accessed(pte, operation_cause, _mode)
                 || should_dirty_set(pte, operation_cause, _mode)) begin
                // v1.10.0 p.61
-               state <= UPDATE_PTE;
+               state <= UPDATING_PTE;
 
                // back up query information
                _paddr <= level? lower32(l1_result(pte, _vaddr)) : lower32(l0_result(pte, _vaddr));
@@ -535,8 +535,8 @@ module mmu(
    wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
                (mem_request_enable)? mreq_wstrb:
                1'b0;
-   wire _req_cause = (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;
-   wire [1:0] _req_cpu_mode = fetch_request_enable? actual_cpu_mode : mprv_cpu_mode;
+   wire        _req_cause = (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;
+   wire [1:0]  _req_cpu_mode = fetch_request_enable? actual_cpu_mode : mprv_cpu_mode;
    
    
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
@@ -573,7 +573,7 @@ module mmu(
                   end else if ((!is_accessed(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode))
                                || should_dirty_set(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode)) begin
                      // v1.10.0 p.61
-                     state <= UPDATE_PTE;
+                     state <= UPDATING_PTE;
 
                      // back up query information
                      _mode <= _req_mode;                     
@@ -652,7 +652,7 @@ module mmu(
                                             _mode, operation_cause, _vaddr);               
                end
             end
-         end else if (state == UPDATE_PTE & response_enable) begin
+         end else if (state == UPDATING_PTE & response_enable) begin
             state <= WAITING_RESPONSE;
             
             request_enable <= 1'b1;
