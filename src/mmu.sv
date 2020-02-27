@@ -511,7 +511,7 @@ module mmu(
                                                       _req_mode, 
                                                       dirty_bit(tlb_to_pte(tlb_entry(_req_addr))), 
                                                       23'b0}, 
-                                               _mode, _req_cause, _req_addr);                  
+                                               _req_mode, _req_cause, _req_addr);                  
                   end else begin
                      state <= WAITING_RESPONSE;
                      request_enable <= 1'b1;
