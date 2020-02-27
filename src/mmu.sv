@@ -584,7 +584,7 @@ module mmu(
                      
                      // update pte on tlb
                      // TODO: update correctly
-                     invalite_pte(_req_addr);
+                     invalidate_pte(_req_addr);
 
                      // update pte on memory
                      request_enable <= 1'b1;
