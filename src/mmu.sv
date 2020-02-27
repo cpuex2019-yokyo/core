@@ -430,7 +430,7 @@ module mmu(
    
    // main logic
    ///////////////////
-   function lower32 (input [33:0] full_addr);
+   function [31:0] lower32 (input [33:0] full_addr);
       lower32 = full_addr[31:0];      
    endfunction
    
