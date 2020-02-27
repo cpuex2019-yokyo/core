@@ -504,11 +504,11 @@ module mmu(
                request_enable <= 1'b1;
                req_mode <= MEMREQ_WRITE;
                req_wstrb <= 4'b1111;
-               req_wdata <=  pte | {22'b0, // phys addr
-                                    2'b00, // rsw
-                                    operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE, // dirty
-                                    1'b1, // accessed
-                                    6'b0};
+               req_wdata <=  to_le32(pte | {22'b0, // phys addr
+                                            2'b00, // rsw
+                                            operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE, // dirty
+                                            1'b1, // accessed
+                                            6'b0});
             end else begin            
                state <= WAITING_RESPONSE;
                
@@ -591,11 +591,11 @@ module mmu(
                      req_mode <= MEMREQ_WRITE;
                      req_addr <= tlb_entry_addr(_req_addr);
                      req_wstrb <= 4'b1111;
-                     req_wdata <= tlb_to_pte(tlb_entry(_req_addr)) | {22'b0, // phys addr
-                                                                      2'b00, // rsw
-                                                                      _req_cause == CAUSE_MEM && _req_mode == MEMREQ_WRITE, // dirty
-                                                                      1'b1, // accessed
-                                                                      6'b0};                     
+                     req_wdata <= to_le32(tlb_to_pte(tlb_entry(_req_addr)) | {22'b0, // phys addr
+                                                                              2'b00, // rsw
+                                                                              _req_cause == CAUSE_MEM && _req_mode == MEMREQ_WRITE, // dirty
+                                                                              1'b1, // accessed
+                                                                              6'b0});                     
                   end else begin
                      state <= WAITING_RESPONSE;
                      
