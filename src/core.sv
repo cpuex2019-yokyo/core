@@ -477,6 +477,14 @@ module core
       end
    endtask
    
+   task raise_storeamo_pagefault_exception();
+      begin
+         is_exception_enabled <= 1'b1;               
+         exception_number <= 5'd15;
+         exception_tval <= mem_exception_tval;
+      end
+   endtask
+
    task raise_ecall;
       begin
          is_exception_enabled <= 1'b1;               
@@ -1047,11 +1055,11 @@ module core
             exec_enabled <= 0;
 
             if (mem_exception_enable) begin
-               state <= TRAP;               
-               raise_mem_exception();               
-            end else if (mmu_exception_enable) begin
                state <= TRAP;
-               raise_mmu_exception();
+               raise_mem_exception();
+            end else if (mmu_exception_enable) begin
+               state <= TRAP;               
+               raise_storeamo_pagefault_exception();
             end else begin
                // start to store ... m -> (binop) -> m
                // op tmp, rs2, rd -> sw tmp, (rs1)            
@@ -1084,7 +1092,7 @@ module core
                raise_mem_exception();               
             end else if (mmu_exception_enable) begin
                state <= TRAP;
-               raise_mmu_exception();
+               raise_storeamo_pagefault_exception();
             end else begin
                // start to write ... args are prepared when it leaves from EXEC_ATOM1
                state <= WRITE;
