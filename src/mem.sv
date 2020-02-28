@@ -77,7 +77,6 @@ module mem(
    end
    
    // NOTE: amo* uses register.rs1 to tell the address and others use arg.
-   // TODO(linux): fix endian
    wire [31:0] _addr = (instr.lr | instr.sc |  amo_read_stage | amo_write_stage)? register.rs1 : arg;
    wire [31:0] _data_to_write = (instr.sc | amo_write_stage)? arg : register.rs2;
    
