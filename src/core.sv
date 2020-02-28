@@ -371,7 +371,6 @@ module core
             state <= TRAP;
             raise_illegal_instruction(instr_raw);            
          end else begin
-            // TODO: flush TLB
             _satp <= value;            
          end
       end
