@@ -21,7 +21,7 @@ module alu
    reg               mul_is_signed;   
    reg [31:0]        mul_op1;
    reg [31:0]        mul_op2;
-   wire [31:0]       mul_result;
+   wire [63:0]       mul_result;
    mul _mul(.clk(clk),
             .enable(mul_enabled),
             .completed(mul_completed),
