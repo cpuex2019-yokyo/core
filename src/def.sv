@@ -138,6 +138,7 @@ typedef struct {
    reg         rv32a;
    reg         csrop;         
    reg         writes_to_reg;
+   reg         writes_to_csr;
    reg         is_store;
    reg         is_load;
    reg         is_conditional_jump;

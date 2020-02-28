@@ -58,7 +58,7 @@ module memrq2axi(
          
          axi_araddr <= 32'b0;
          axi_arvalid <= 0;
-         axi_arprot <= 2'b0;
+         axi_arprot <= 3'b0;
          
          axi_bready <= 0;
          
@@ -66,7 +66,7 @@ module memrq2axi(
          
          axi_awaddr <= 32'b0;
          axi_awvalid <= 0;
-         axi_awprot <= 2'b0;
+         axi_awprot <= 3'b0;
          
          axi_wdata <= 32'b0;
          axi_wstrb <= 4'b0;

@@ -5,7 +5,8 @@ module mmu_wrapper (
                     input wire         rstn,
 
                     input wire [31:0]  satp,
-                    input wire [1:0]   cpu_mode,
+                    input wire [1:0]   mprv_cpu_mode,
+                    input wire [1:0]   actual_cpu_mode,
                     input wire         mxr,
                     input wire         sum,
 
@@ -44,7 +45,8 @@ module mmu_wrapper (
    mmu _mmu(.clk(clk), .rstn(rstn),
 
             .satp(satp),
-            .cpu_mode(cpu_mode),
+            .mprv_cpu_mode(mprv_cpu_mode),
+            .actual_cpu_mode(actual_cpu_mode),
             .mxr(mxr),
             .sum(sum),
       

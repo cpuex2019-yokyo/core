@@ -8,6 +8,7 @@ module decoder
    // control flags
    input wire        enabled,
    output reg        completed,
+   output reg        succeeded,
 
    // bus
    // none
@@ -151,13 +152,15 @@ module decoder
    /////////
    wire              _is_store = (_sb
                                   || _sh
-                                  || _sw);
+                                  || _sw
+                                  || _sc);
 
    wire              _is_load = (_lb
                                  || _lh
                                  || _lw
                                  || _lbu
-                                 || _lhu);
+                                 || _lhu
+                                 || _lr);
 
    wire              _is_conditional_jump = (_beq
                                              || _bne
@@ -167,6 +170,7 @@ module decoder
                                              || _bgeu);
 
    wire              _rv32a = (_sc
+                               || _lr
                                || _amoswap
                                || _amoadd
                                || _amoxor
@@ -194,9 +198,100 @@ module decoder
       if (rstn) begin
          if (enabled) begin
             completed <= 1;
+            succeeded <= (1'b0
+                          /////////
+                          // rv32i
+                          /////////                        
+                          || _lui
+                          || _auipc
+               
+                          || _jal
+                          || _jalr
+               
+                          // conditional branch
+                          || _beq
+                          || _bne
+                          || _blt
+                          || _bge
+                          || _bltu
+                          || _bgeu
 
+                          // load store
+                          || _lb
+                          || _lh
+                          || _lw
+                          || _lbu
+                          || _lhu
+                          || _sb
+                          || _sh
+                          || _sw
+                          || _addi
+                          || _slti
+                          || _sltiu
+                          || _xori
+                          || _ori
+                          || _andi
+                          || _slli
+                          || _srli
+                          || _srai
+                          // arith others
+                          || _add
+                          || _sub
+                          || _sll
+                          || _slt
+                          || _sltu
+                          || _xor
+                          || _srl
+                          || _sra
+                          || _or
+                          || _and
+
+                          // others
+                          || _fence
+                          || _fencei
+                          || _ecall
+                          || _ebreak
+                          || _csrrw
+                          || _csrrs
+                          || _csrrc
+                          || _csrrwi
+                          || _csrrsi
+                          || _csrrci
+                          /////////
+                          // rv32m
+                          /////////                        
+                          || _mul
+                          || _mulh
+                          || _mulhsu
+                          || _mulhu
+                          || _div
+                          || _divu
+                          || _rem
+                          || _remu
+                          /////////
+                          // rv32a
+                          /////////                        
+                          || _lr
+                          || _sc
+                          || _amoswap
+                          || _amoadd
+                          || _amoxor
+                          || _amoand
+                          || _amoor
+                          || _amomin
+                          || _amomax
+                          || _amominu
+                          || _amomaxu
+                          /////////
+                          // rv32s
+                          /////////                        
+                          || _sret
+                          || _mret
+                          || _wfi
+                          || _sfence_vma);                                      
+            
             /////////
-            // rv32i
+              // rv32i
             /////////
             // lui, auipc
             instr.lui <= _lui;
@@ -298,7 +393,7 @@ module decoder
             instr.rv32a <= _rv32a;
             
             instr.writes_to_reg <= !(_is_conditional_jump
-                                     || _is_store
+                                     || (_is_store && !_sc)
                                      // rv32i others
                                      || _fence
                                      || _fencei
@@ -308,14 +403,22 @@ module decoder
                                      || _mret
                                      || _sret
                                      || _wfi
-                                     || _sfence_vma);            
+                                     || _sfence_vma);
+
+            instr.writes_to_csr <= ((_csrrw)
+                                    || (_csrrs && _rs1 != 0)
+                                    || (_csrrc && _rs1 != 0)
+                                    || (_csrrwi)
+                                    || (_csrrsi && _rs1 != 0)
+                                    || (_csrrci && _rs1 != 0));
+            
 
             instr.is_store <= _is_store;
             instr.is_load <= _is_load;
             instr.is_conditional_jump <= _is_conditional_jump;
 
             /////////
-            // operands
+              // operands
             /////////            
             instr.rd <= (r_type || i_type || u_type || j_type) ? _rd : 5'b00000;
             instr.rs1 <= (r_type || i_type || s_type || b_type) ? _rs1 : 5'b00000;

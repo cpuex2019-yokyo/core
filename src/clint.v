@@ -35,7 +35,7 @@ module clint(
    localparam mtimecmp_addr = 32'h4000;
    localparam mtime_addr = 32'hbff8;		// Read Only
 
-   reg [63:0]                  mtimecmp;
+   (* mark_debug = "true" *) reg [63:0]                  mtimecmp;
 
    assign time_intr = mtimecmp <= mtime;
 

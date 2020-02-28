@@ -41,13 +41,29 @@ module virtio(
               input wire [31:0] mem_data,
 
               // bus for disk
-              output reg        disk_request_enable,
-              output reg        disk_mode,
-              output reg [31:0] disk_addr,
-              output reg [31:0] disk_wdata,
-              output reg [3:0]  disk_wstrb, 
-              input wire        disk_response_enable,
-              input wire [31:0] disk_data,
+               output reg [31:0] m_spi_araddr,
+               input wire        m_spi_arready,
+               output reg        m_spi_arvalid,
+               output reg [2:0]  m_spi_arprot,
+
+               input wire [31:0] m_spi_rdata,
+               output reg        m_spi_rready,
+               input wire [1:0]  m_spi_rresp,
+               input wire        m_spi_rvalid,
+
+               output reg        m_spi_bready,
+               input wire [1:0]  m_spi_bresp,
+               input wire        m_spi_bvalid,
+
+               output reg [31:0] m_spi_awaddr,
+               input wire        m_spi_awready,
+               output reg        m_spi_awvalid,
+               output reg [2:0]  m_spi_awprot,
+
+               output reg [31:0] m_spi_wdata,
+               input wire        m_spi_wready,
+               output reg [3:0]  m_spi_wstrb,
+               output reg        m_spi_wvalid,
 
               // general
               output reg        virtio_interrupt
@@ -66,7 +82,8 @@ module virtio(
    (* mark_debug = "true" *) reg [31:0]                   guest_page_size;
    (* mark_debug = "true" *) reg [31:0]                   queue_sel;
    wire [31:0]                  queue_num_max = (queue_sel == 32'b0)? 32'd8 : 32'd0;
-   (* mark_debug = "true" *) reg [31:0]                   queue_num;
+   // We fix queue_num by 8 for speedup!
+   //(* mark_debug = "true" *) reg [31:0]                   queue_num;
    (* mark_debug = "true" *) reg [31:0]                   queue_align;
    (* mark_debug = "true" *) reg [31:0]                   queue_pfn;
 
@@ -84,7 +101,7 @@ module virtio(
 
    (* mark_debug = "true" *) reg [31:0] _addr;
    (* mark_debug = "true" *) reg [31:0] _data;   
-   (* mark_debug = "true" *) reg [3:0]  _wstrb;   
+   (* mark_debug = "true" *) reg [3:0]  _wstrb;  
    
    // mmio interface
    ///////////////////////
@@ -96,7 +113,7 @@ module virtio(
          guest_features <= 32'b0;
          guest_features_sel <= 32'b0;
          queue_sel <= 32'b0;
-         queue_num <= 32'b0;
+         //queue_num <= 32'b0;
          queue_align <= 32'b0;
          queue_pfn <= 32'b0;
          queue_ready <= 32'b0;
@@ -152,7 +169,7 @@ module virtio(
            32'h24: guest_features_sel <= data;
            32'h28: guest_page_size <= data;
            32'h30: queue_sel <= data;
-           32'h38: queue_num <= data;
+           //32'h38: queue_num <= data;
            32'h3c: queue_align <= data;
            32'h40: queue_pfn <= data;
            32'h50: queue_notify <= data;
@@ -243,10 +260,11 @@ module virtio(
    // idx cache
    (* mark_debug = "true" *) reg [15:0] avail_idx;
    (* mark_debug = "true" *) reg [15:0] used_idx;
+   wire [31:0]                  used_idx_minus1 = used_idx - 1;
    
    // given virtqueue 
    wire [31:0] desc_head = {queue_pfn[19:0], 12'b0};
-   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {queue_num[27:0], 4'b0};
+   wire [31:0] avail_head = {queue_pfn[19:0], 12'b0} + {28'd8, 4'b0};
    wire [31:0] used_head = avail_head + (QUEUE_ALIGN - avail_head[11:0]);
 
    // loaded data
@@ -268,14 +286,14 @@ module virtio(
             desc.addr[63:32] <= 32'b0;
             mem_request_enable <= 1;
             mem_mode <= MEMREQ_READ;                  
-            mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 0;
+            mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 0;
          end else if (load_desc_microstate == 1) begin
             if (mem_response_enable) begin
                load_desc_microstate <= 2;
                desc.addr[31:0] <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 8;               
+               mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 8;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -285,7 +303,7 @@ module virtio(
                desc.len <= to_le32(mem_data);               
                mem_request_enable <= 1;
                mem_mode <= MEMREQ_READ;
-               mem_addr <= desc_head + 16 * (desc_idx % queue_num) + 12;               
+               mem_addr <= desc_head + {desc_idx[2:0], 4'b0} + 12;               
             end else begin
                mem_request_enable <= 0;            
             end
@@ -357,29 +375,278 @@ module virtio(
    (* mark_debug = "true" *) reg [6:0]      cdisk_loop_index;
    (* mark_debug = "true" *) reg [31:0]     cdisk_buf [0:127];
    (* mark_debug = "true" *) reg [31:0]     wrote_size;      
+
+   (* mark_debug = "true" *) enum reg [3:0] {
+      SPI_IDLE,
+      SPI_PREPARE,
+      SPI_ERASE,
+      SPI_PROGRAM,
+      SPI_WIP,
+      SPI_READ
+   } spi_mode;
+
+   (* mark_debug = "true" *) enum reg [3:0] {
+      SPI_STATE_COMMAND,
+      SPI_STATE_ENABLE,
+      SPI_STATE_WIP,
+      SPI_STATE_READ,
+      SPI_STATE_DISABLE
+   } spi_state;
+
+   (* mark_debug = "true" *) reg [7:0] spi_phase;
+   (* mark_debug = "true" *) reg [1:0] spi_rep;
+   (* mark_debug = "true" *) reg [1:0] spi_prepare_state;
+   (* mark_debug = "true" *) reg [1:0] spi_wip_state;
+   (* mark_debug = "true" *) reg spi_wenable;
+
+   task spi_command();
+      begin
+         spi_phase <= spi_phase + 8'h1;
+         if(spi_phase == 8'hf8) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h1e6;
+         end else if(spi_phase == 8'hf9 || spi_phase == 8'hfa) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h1;
+         end else if(spi_phase == 8'hfb) begin
+            m_spi_awaddr <= 32'h68;
+            if(spi_mode == SPI_PREPARE) begin
+               m_spi_wdata <= 32'h06;
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+            end else if(spi_mode == SPI_ERASE) begin
+               m_spi_wdata <= 32'h20;
+            end else if(spi_mode == SPI_PROGRAM) begin
+               m_spi_wdata <= 32'h12;
+            end else if(spi_mode == SPI_WIP) begin
+               m_spi_wdata <= 32'h05;
+            end else if(spi_mode == SPI_READ) begin
+               m_spi_wdata <= 32'h13;
+            end
+         end else if(spi_phase == 8'hfc) begin
+            if(spi_mode == SPI_WIP) begin
+               m_spi_wdata <= 32'hff;
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 32'h0;
+            end else begin
+               m_spi_wdata <= {24'h0, outhdr.sector[22:15]};
+            end
+         end else if(spi_phase == 8'hfd) begin
+            m_spi_wdata <= {24'h0, outhdr.sector[14:7]};
+         end else if(spi_phase == 8'hfe) begin
+            m_spi_wdata <= {24'h0, outhdr.sector[6:0], spi_rep[1]};
+         end else if(spi_phase == 8'hff) begin
+            m_spi_wdata <= {24'h0, spi_rep[0], 7'h0};
+            if(spi_mode == SPI_ERASE) begin
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+            end
+         end else if(spi_phase < 8'h80) begin
+            m_spi_wdata <= spi_mode == SPI_PROGRAM ? {24'h0, cdisk_buf[{spi_rep, spi_phase[6:2]}][{2'h3 - spi_phase[1:0], 3'h0} +: 5'h8]} : 32'hff;
+            if(spi_phase == 8'h7f) begin
+               spi_state <= SPI_STATE_ENABLE;
+               spi_phase <= 8'h0;
+               if(spi_mode == SPI_PROGRAM) spi_rep <= spi_rep + 2'h1;
+            end
+         end
+      end
+   endtask
+
+   task spi_enable();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h0;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h86;
+            spi_wenable <= 1'b0;
+            spi_phase <= 8'h2;
+         end else if(spi_phase == 8'h2) begin
+            m_spi_arvalid <= 1'b1;
+            m_spi_rready <= 1'b1;
+            m_spi_araddr <= 32'h20;
+            spi_phase <= 8'h3;
+         end else begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               if(m_spi_rdata[2]) begin
+                  m_spi_rready <= 1'b0;
+                  spi_phase <= 8'h0;
+                  if(spi_mode == SPI_WIP) begin
+                     spi_state <= SPI_STATE_WIP;
+                  end else if(spi_mode == SPI_READ) begin
+                     spi_state <= SPI_STATE_READ;
+                     spi_phase <= 8'hfb;
+                     m_spi_arvalid <= 1'b1;
+                     m_spi_rready <= 1'b1;
+                     m_spi_araddr <= 32'h6c;
+                  end else begin
+                     spi_wenable <= 1'b1;
+                     spi_state <= SPI_STATE_DISABLE;
+                  end
+               end else begin
+                  m_spi_arvalid <= 1'b1;
+               end
+            end
+         end
+      end
+   endtask
+
+   task spi_disable();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_awaddr <= 32'h60;
+            m_spi_wdata <= 32'h1e6;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            m_spi_awaddr <= 32'h70;
+            m_spi_wdata <= 32'h1;
+            spi_phase <= 8'h2;
+         end else if(spi_phase == 8'h2) begin
+            m_spi_awaddr <= 32'h20;
+            m_spi_wdata <= 32'h4;
+            spi_state <= SPI_STATE_COMMAND;
+            spi_phase <= 8'hfb;
+            if(spi_mode == SPI_PREPARE) begin
+               if(spi_prepare_state == 2'h0) begin
+                  spi_mode <= SPI_READ;
+               end else if(spi_prepare_state == 2'h1)begin
+                  spi_mode <= SPI_PREPARE;
+                  spi_prepare_state <= 2'h2;
+               end else if(spi_prepare_state == 2'h2)begin
+                  spi_mode <= SPI_ERASE;
+               end else if(spi_prepare_state == 2'h3)begin
+                  spi_mode <= SPI_PROGRAM;
+               end
+            end else if(spi_mode == SPI_ERASE) begin
+               spi_mode <= SPI_WIP;
+               spi_wip_state <= 2'h2;
+            end else if(spi_mode == SPI_PROGRAM) begin
+               spi_mode <= SPI_WIP;
+               spi_wip_state <= 2'h3;
+            end else if(spi_mode == SPI_WIP) begin
+               if(spi_wip_state == 2'h0) begin
+                  spi_mode <= SPI_PREPARE;
+                  spi_prepare_state <= 2'h3;
+               end else if(spi_wip_state == 2'h1)begin
+                  if(spi_rep == 2'h0) begin
+                     spi_mode <= SPI_IDLE;
+                     spi_wenable <= 1'b0;
+                     
+                     // write finished
+                     if (wrote_size + 32'd512 == buffer_len) begin
+                        cdisk_microstate <= CDISK_INIT;
+                        controller_state <= WRITE_STATUS;    
+                     end else begin
+                        wrote_size <= wrote_size + 32'd512;                     
+                        cdisk_microstate <= CDISK_R_MEM_STARTUP;
+                        outhdr.sector <= outhdr.sector + 1;                     
+                        buffer_addr <= buffer_addr + 32'd512;                     
+                     end
+                  end else begin
+                     spi_mode <= SPI_PREPARE;
+                     spi_prepare_state <= 2'h3;
+                  end                  
+               end
+            end else if(spi_mode == SPI_READ) begin
+               if(spi_rep == 2'h0) begin
+                  // read finished
+                  spi_mode <= SPI_IDLE;
+                  spi_wenable <= 1'b0;
+                  cdisk_microstate <= CDISK_W_MEM;
+                  write_mem(1);                  
+               end
+            end
+         end
+      end
+   endtask
    
+   task spi_reading();
+      begin
+         if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+            spi_phase <= spi_phase + 8'h1;
+            m_spi_arvalid <= 1'b1;
+            if(spi_phase < 8'h80) begin
+               cdisk_buf[{spi_rep, spi_phase[6:2]}][{2'h3 - spi_phase[1:0], 3'h0} +: 5'h8] <= m_spi_rdata[7:0];
+               if(spi_phase == 8'h7f) begin
+                  m_spi_arvalid <= 1'b0;
+                  m_spi_rready <= 1'b0;
+                  spi_wenable <= 1'b1;
+                  spi_state <= SPI_STATE_DISABLE;
+                  spi_phase <= 8'h0;
+                  spi_rep <= spi_rep + 2'h1;
+               end
+            end
+         end
+      end
+   endtask
+
+   task spi_watch_wip();
+      begin
+         if(spi_phase == 8'h0) begin
+            m_spi_arvalid <= 1'b1;
+            m_spi_rready <= 1'b1;
+            m_spi_araddr <= 32'h6c;
+            spi_phase <= 8'h1;
+         end else if(spi_phase == 8'h1) begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               m_spi_arvalid <= 1'b1;
+               spi_phase <= 8'h2;
+            end
+         end else if(spi_phase == 8'h2) begin
+            if(m_spi_rready && m_spi_rvalid && ~m_spi_rresp[1]) begin
+               m_spi_rready <= 1'b0;
+               spi_wip_state[1] <= m_spi_rdata[0];
+               spi_wenable <= 1'b1;
+               spi_state <= SPI_STATE_DISABLE;
+               spi_phase <= 8'h0;
+            end
+         end
+      end
+   endtask
+
    task load_disk(input startup);
       begin
          if (startup) begin
-            cdisk_loop_index <= 0;
-            disk_request_enable <= 1'b1;
-            disk_mode <= MEMREQ_READ;
-            disk_addr <= {outhdr.sector[22:0], 9'b0};            
-         end else begin
-            if (disk_response_enable) begin
-               cdisk_buf[cdisk_loop_index] <=  disk_data;                  
-               cdisk_loop_index <= cdisk_loop_index + 1;
-               
-               if (cdisk_loop_index == 127) begin
-                  cdisk_microstate <= CDISK_W_MEM;
-                  write_mem(1);                  
-               end else begin                  
-                  disk_request_enable <= 1'b1;
-                  disk_mode <= MEMREQ_READ;
-                  disk_addr <= {outhdr.sector[22:0], 9'b0} + 4 * (cdisk_loop_index+1);
-               end
-            end else begin
-               disk_request_enable <= 1'b0;                           
+            spi_mode <= SPI_PREPARE;
+            spi_state <= SPI_STATE_COMMAND;   
+            spi_phase <= 8'hf8;
+            spi_rep <= 2'h0;
+            spi_prepare_state <= 2'h0;
+            spi_wenable <= 1'b1;
+         end else if(~m_spi_bready) begin 
+            if(spi_state == SPI_STATE_COMMAND) begin
+               spi_command();
+            end else if(spi_state == SPI_STATE_ENABLE) begin
+               spi_enable();
+            end else if(spi_state == SPI_STATE_DISABLE) begin
+               spi_disable();
+            end else if(spi_state == SPI_STATE_READ) begin
+               spi_reading();
+            end
+         end
+      end
+   endtask
+
+   task write_disk(input startup);
+      begin
+         if (startup) begin
+            spi_mode <= SPI_PREPARE;
+            spi_state <= SPI_STATE_COMMAND;   
+            spi_phase <= 8'hf8;
+            spi_rep <= 2'h0;
+            spi_prepare_state <= 2'h1;
+            spi_wenable <= 1'b1;
+         end else if(~m_spi_bready) begin
+            if(spi_state == SPI_STATE_COMMAND) begin
+               spi_command();
+            end else if(spi_state == SPI_STATE_ENABLE) begin
+               spi_enable();
+            end else if(spi_state == SPI_STATE_WIP) begin
+               spi_watch_wip();
+            end else if(spi_state == SPI_STATE_DISABLE) begin
+               spi_disable();
             end
          end
       end
@@ -449,42 +716,6 @@ module virtio(
       end
    endtask
 
-   task write_disk(input startup);
-      begin
-         if (startup) begin
-            cdisk_loop_index <= 0;
-            disk_request_enable <= 1'b1;
-            disk_mode <= MEMREQ_WRITE;
-            disk_wdata <= cdisk_buf[0];
-            disk_wstrb <= 4'b1111;
-            disk_addr <= {outhdr.sector[22:0], 9'b0};            
-         end else begin
-            if (disk_response_enable) begin
-               if (cdisk_loop_index == 127) begin
-                  if (wrote_size + 32'd512 == buffer_len) begin
-                     cdisk_microstate <= CDISK_INIT;
-                     controller_state <= WRITE_STATUS;                     
-                  end else begin
-                     wrote_size <= wrote_size + 32'd512;                     
-                     cdisk_microstate <= CDISK_R_MEM_STARTUP;
-                     outhdr.sector <= outhdr.sector + 1;                     
-                     buffer_addr <= buffer_addr + 32'd512;                     
-                  end
-               end else begin
-                  cdisk_loop_index <= cdisk_loop_index + 1;               
-                  disk_request_enable <= 1'b1;
-                  disk_mode <= MEMREQ_WRITE;
-                  disk_wdata <= cdisk_buf[cdisk_loop_index + 1];
-                  disk_wstrb <= 4'b1111;
-                  disk_addr <= {outhdr.sector[22:0], 9'b0} + 4 * (cdisk_loop_index+1);
-               end                  
-            end else begin
-               disk_request_enable <= 1'b0;                           
-            end
-         end
-      end
-   endtask
-   
    task control_disk;
       begin
          if (cdisk_microstate == CDISK_INIT) begin
@@ -564,23 +795,23 @@ module virtio(
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
                notify_microstate <= NOTIFY_WAITING2;
-               // write to used[used_idx-1].id
+               // write to used[(used_idx-1) % queue_num].id
                mem_request_enable <= 1'b1;
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= to_le32({16'b0, first_idx});
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + 8 * (used_idx-1);
+               mem_addr <= used_head + 4 + {used_idx_minus1[2:0], 3'b0};
             end
          end else if (notify_microstate == NOTIFY_WAITING2) begin
             mem_request_enable <= 1'b0;                 
             if (mem_response_enable) begin
                notify_microstate <= NOTIFY_WAITING3;
-               // write to used[used_idx-1].len
+               // write to used[(used_idx-1) % queue_num].len
                mem_request_enable <= 1'b1;
                mem_mode <= MEMREQ_WRITE;
                mem_wdata <= 32'b0; // TODO(linux): set appropriate value
                mem_wstrb <= 4'b1111;
-               mem_addr <= used_head + 4 + 8 * (used_idx-1) + 4;
+               mem_addr <= used_head + 4 + {used_idx_minus1[2:0], 3'b0} + 4;
             end
          end else if (notify_microstate == NOTIFY_WAITING3) begin
             mem_request_enable <= 1'b0;                 
@@ -636,7 +867,20 @@ module virtio(
          mem_mode <= 1'b0;
          mem_addr <= 32'b0;
          mem_wdata <= 32'b0;
-         mem_wstrb <= 4'b0;               
+         mem_wstrb <= 4'b0;
+
+         m_spi_araddr <= 32'h0;
+			m_spi_arvalid <= 1'b0;
+			m_spi_arprot <= 3'b000;
+			m_spi_rready <= 1'b0;
+			m_spi_bready <= 1'b0;
+			m_spi_awaddr <= 32'h0;
+			m_spi_awvalid <= 1'b0;
+			m_spi_awprot <= 3'b000;
+			m_spi_wdata <= 32'h0;
+			m_spi_wstrb <= 4'b1111;
+			m_spi_wvalid <= 1'b0;
+         spi_wenable <= 1'b0;           
       end
    endtask
 
@@ -663,7 +907,7 @@ module virtio(
 
                   mem_request_enable <= 1;
                   mem_mode <= MEMREQ_READ;            
-                  mem_addr <= avail_head + 4 + 2 * (used_idx % queue_num);    
+                  mem_addr <= avail_head + 4 + {used_idx[2:0], 1'b0};    
                end else begin
                   controller_state <= RAISE_IRQ;
                end
@@ -711,6 +955,28 @@ module virtio(
          end else if (controller_state == RAISE_IRQ) begin
             virtio_interrupt <= 1'b1;            
             controller_state <= WAITING_NOTIFICATION;            
+         end
+
+         if(m_spi_arready && m_spi_arvalid) m_spi_arvalid <= 1'b0;
+         if(m_spi_rready && m_spi_rvalid) begin
+            if(m_spi_rresp[1]) begin
+               m_spi_arvalid <= 1'b1;
+            end
+         end
+         if(m_spi_awready && m_spi_awvalid) m_spi_awvalid <= 1'b0;
+         if(m_spi_wready && m_spi_wvalid) m_spi_wvalid <= 1'b0;
+         if(m_spi_bready && m_spi_bvalid) begin
+            if(m_spi_bresp[1]) begin
+               m_spi_awvalid <= 1'b1;
+               m_spi_wvalid <= 1'b1;
+            end else begin
+               m_spi_bready <= 1'b0;
+            end
+         end
+         if(spi_wenable && ~m_spi_bready) begin
+            m_spi_awvalid <= 1'b1;
+            m_spi_wvalid <= 1'b1;
+            m_spi_bready <= 1'b1;
          end
       end else begin 
          init_controller();
