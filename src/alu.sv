@@ -157,16 +157,7 @@ module alu
                      instr.csrrsi? 32'b0: // will be handed in core.sv
                      instr.csrrci? 32'b0: // will be handed in core.sv
                      ///// rv32m /////
-                     // TODO: seems to be buggy; not fully tested yet.
-                     // zero division does not cause any exceptions in RISC-V
-                     // instr.mul? mul_temp[31:0]:
-                     // instr.mulh? mul_temp[63:32]:
-                     // instr.mulhsu? mul_temp_hsu[63:32]:
-                     // instr.mulhu? mul_temp_hu[63:32]:
-                     // instr.div? div32(register.rs1, register.rs2):
-                     // instr.rem? rem32(register.rs1, register.rs2):
-                     // instr.divu? divu32(register.rs1, register.rs2):
-                     // instr.remu? remu32(register.rs1, register.rs2):
+                     // implemented as a module.
                      ///// rv32m /////
                      instr.amoswap? 32'b0: // will be handed in core.sv
                      instr.amoand? 32'b0: // will be handed in core.sv
