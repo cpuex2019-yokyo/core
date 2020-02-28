@@ -180,6 +180,7 @@ module alu
             if (instr.mul | instr.mulh | instr.mulhsu | instr.mulhu) begin
                completed <= 0;
                state <= MULDIV;
+               mul_enabled <= 1'b1;               
 
                if (instr.mul | instr.mulh) begin
                   mul_op1 <= register.rs1;
