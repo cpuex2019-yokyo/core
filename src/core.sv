@@ -74,6 +74,7 @@ module core
       begin
          instr <= '{default: '0};
          register <= '{default: '0};
+         is_exception_enabled <= 1'b0;
       end
    endtask
    
@@ -370,7 +371,6 @@ module core
             state <= TRAP;
             raise_illegal_instruction(instr_raw);            
          end else begin
-            // TODO: flush TLB
             _satp <= value;            
          end
       end
@@ -430,13 +430,15 @@ module core
                                                         (_mip[5] && _mie[5])? 32'd5:
                                                         32'd0);
 
-   // exceptions
+   // exceptions   
+   (* mark_debug = "true" *) reg is_exception_enabled;   
    (* mark_debug = "true" *) reg [4:0]           exception_number;   
    (* mark_debug = "true" *) reg [31:0]          exception_tval;
    wire [1:0]          next_cpu_mode_when_exception = _medeleg[exception_number]? CPU_S : CPU_M;                 
    
    task raise_illegal_instruction(input [31:0] _tval);
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= 5'd2;         
          exception_tval <= _tval;  // _tval should be faulting instruction
       end      
@@ -444,6 +446,7 @@ module core
 
    task raise_instruction_address_misaligned(input [31:0] _tval);
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= 5'd0;         
          exception_tval <= _tval; // _tval should be faulting address
       end
@@ -451,6 +454,7 @@ module core
 
    task raise_storeamo_address_misaligned(input [31:0] _tval);
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= 5'd6;         
          exception_tval <= _tval; // _tval should be faulting address
       end
@@ -458,6 +462,7 @@ module core
    
    task raise_mmu_exception();
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= mmu_exception_vec;
          exception_tval <= mmu_exception_tval;
       end
@@ -465,6 +470,7 @@ module core
 
    task raise_mem_exception();
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= mem_exception_vec;
          exception_tval <= mem_exception_tval;
       end
@@ -472,6 +478,7 @@ module core
    
    task raise_ecall;
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= cpu_mode == CPU_M? 5'd11:
                              cpu_mode == CPU_S? 5'd9:
                              cpu_mode == CPU_U? 5'd8:
@@ -483,6 +490,7 @@ module core
 
    task raise_ebreak;      
       begin
+         is_exception_enabled <= 1'b1;               
          exception_number <= 5'd3;  
          // NOTE: is it okay?        
          exception_tval <= pc;
@@ -661,7 +669,8 @@ module core
          reserved_addr <= 32'b0;
          reserved_valid <= 1'b0;         
          is_csr_valid <= 1'b0;
-         
+
+         is_exception_enabled <= 1'b0;         
          exception_number <= 5'b0;
          exception_tval <= 32'b0;
 
@@ -1202,7 +1211,17 @@ module core
 
             // *epc should be the virtual address of the instruction that encountered the exception.
             // (priv 1.10 p.34 and others)
-            if (is_interrupted) begin
+            if (is_exception_enabled) begin
+               // [*] trap by exception (sync)
+               // faulting address is pc.
+               // TODO: Do we have to care about simultaneous (synchronous) exceptions and interrupts?
+               cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
+               set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);               
+               set_epc(next_cpu_mode_when_exception, pc);
+               set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
+               set_tval(next_cpu_mode_when_exception, exception_tval);
+               set_mstatus_by_trap(next_cpu_mode_when_exception);               
+            end else if (is_interrupted) begin
                // [*] trap by interrupts (async)
                // interrupted address is pc (== next_pc).
                // instruction at old pc (one before being updated in WRITE stage) has already been completed!
@@ -1214,17 +1233,7 @@ module core
                          {1'b1, exception_vec_when_interrupted[30:0]});
                set_tval(next_cpu_mode_when_interrupted, 32'd0);
                set_mstatus_by_trap(next_cpu_mode_when_interrupted);               
-            end else begin
-               // [*] trap by exception (sync)
-               // faulting address is pc.
-               // TODO: Do we have to care about simultaneous (synchronous) exceptions and interrupts?
-               cpu_mode <= cpu_mode_base.next(next_cpu_mode_when_exception);
-               set_pc_by_tvec(1'b0, next_cpu_mode_when_exception, 32'b0);               
-               set_epc(next_cpu_mode_when_exception, pc);
-               set_cause(next_cpu_mode_when_exception, {27'b0, exception_number});
-               set_tval(next_cpu_mode_when_exception, exception_tval);
-               set_mstatus_by_trap(next_cpu_mode_when_exception);               
-            end
+            end 
          end else begin
             // In the next clock after enabling *_enabled, we have to pull down them to zero.
             clear_enabled();

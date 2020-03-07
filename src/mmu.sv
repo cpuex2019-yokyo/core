@@ -46,7 +46,8 @@ module mmu(
    typedef enum reg [3:0]    {
                               WAITING_REQUEST,
                               FETCHING_FIRST_PTE, 
-                              FETCHING_SECOND_PTE, 
+                              FETCHING_SECOND_PTE,
+                              UPDATING_PTE,
                               WAITING_RESPONSE,
                               WAITING_RECEIVE
                               } memistate_t;
@@ -61,6 +62,7 @@ module mmu(
    wire [21:0]               satp_ppn = satp[21:0];
    
    (* mark_debug = "true" *) reg [31:0]                _vaddr;   
+   (* mark_debug = "true" *) reg [31:0]                _paddr;   
    (* mark_debug = "true" *) reg                       _mode;
    (* mark_debug = "true" *) reg [31:0]                _wdata;
    (* mark_debug = "true" *) reg [3:0]                 _wstrb;   
@@ -151,7 +153,7 @@ module mmu(
    //       exception_tval <= vaddr;
    //       exception_intl_cause <= {debug_info, 5'd7};         
    //       state <= WAITING_RECEIVE;
-         
+   
    //       if (cause == CAUSE_FETCH) begin
    //          fetch_response_enable <= 1'b1;               
    //          fresp_data <= resp_data;
@@ -181,8 +183,11 @@ module mmu(
 
    function [0:0] is_appropriate_operation(input [31:0] pte, input cause, input mode);
       begin
+         // pte[1] ... R bit
+         // pte[2] ... W bit
+         // pte[3] ... X bit
          is_appropriate_operation = ((cause == CAUSE_FETCH && pte[3])
-                                     || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && pte[1]) 
+                                     || (cause == CAUSE_MEM && ((mode == MEMREQ_READ && (mxr? (pte[1] || pte[3]) : pte[1])) 
                                                                 || (mode == MEMREQ_WRITE && pte[2]))));
       end
    endfunction // is_appropriate_operation
@@ -216,6 +221,8 @@ module mmu(
          exception_tval <= 32'b0;
          exception_enable <= 1'b0;         
          exception_intl_cause <= 32'd0;
+
+         update_index <= 4'b0;         
          
          state <= WAITING_REQUEST;
          clear_tlb();         
@@ -228,11 +235,12 @@ module mmu(
    
    // TLB
    ///////////////////
-   // 52 .. 52 (01) valid (1) or not (0) 
+   // 52 .. 52 (01) valid (1) or not (0)
    // 51 .. 42 (10) pte flags
    // 41 .. 22 (20) virt addr
    // 21 ... 0 (22) phys addr
    reg [52:0]                tlb_table [0:15];
+   reg [31:0]                tlb_addr_table [0:15];   
    
    function [0:0] tlb_valid(input [52:0] entry);
       begin
@@ -274,49 +282,68 @@ module mmu(
       end
    endtask
 
-   task set_tlb(input [31:0] vaddr, input [33:0] paddr, input [9:0] flags);
+   reg [3:0] update_index;   
+   task set_tlb(input [31:0] vaddr, input [33:0] paddr, input [9:0] flags, input [31:0] pte_addr);
       begin
          if (tlb_valid(tlb_entry(vaddr))) begin
             // if there's a valid entry for vaddr, do nothing.
          end else if(!tlb_valid(tlb_table[0])) begin
-            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
+            tlb_addr_table[0] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[1])) begin
             tlb_table[1] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[1] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[2])) begin
             tlb_table[2] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[2] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[3])) begin
             tlb_table[3] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[3] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[4])) begin
             tlb_table[4] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[4] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[5])) begin
             tlb_table[5] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[5] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[6])) begin
             tlb_table[6] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[6] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[7])) begin
             tlb_table[7] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[7] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[8])) begin
             tlb_table[8] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[8] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[9])) begin
             tlb_table[9] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[9] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[10])) begin
             tlb_table[10] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[10] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[11])) begin
             tlb_table[11] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[11] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[12])) begin
             tlb_table[12] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[12] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[13])) begin
             tlb_table[13] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[13] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[14])) begin
             tlb_table[14] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[14] <= pte_addr;            
          end else if(!tlb_valid(tlb_table[15])) begin
             tlb_table[15] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};            
+            tlb_addr_table[15] <= pte_addr;            
          end else begin
             // TODO: should be replaced with a better algorithm!
-            tlb_table[0] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
+            update_index <= update_index + 4'b1;            
+            tlb_table[update_index] <= {1'b1, flags, vaddr[31:12], paddr[33:12]};
+            tlb_addr_table[update_index] <= pte_addr;            
          end
       end
    endtask // set_tlb
-   
+
    task invalidate_pte(input [31:0] vaddr);
       begin
          if (tlb_tag(tlb_table[0]) == vpn(vaddr)) begin
@@ -379,8 +406,34 @@ module mmu(
       end
    endfunction
 
+   function [31:0] tlb_entry_addr(input [31:0] vaddr);
+      begin 
+         tlb_entry_addr = tlb_tag(tlb_table[0]) == vpn(vaddr)? tlb_addr_table[0]:
+                          tlb_tag(tlb_table[1]) == vpn(vaddr)? tlb_addr_table[1]:                             
+                          tlb_tag(tlb_table[2]) == vpn(vaddr)? tlb_addr_table[2]:                             
+                          tlb_tag(tlb_table[3]) == vpn(vaddr)? tlb_addr_table[3]:                             
+                          tlb_tag(tlb_table[4]) == vpn(vaddr)? tlb_addr_table[4]:                             
+                          tlb_tag(tlb_table[5]) == vpn(vaddr)? tlb_addr_table[5]:                             
+                          tlb_tag(tlb_table[6]) == vpn(vaddr)? tlb_addr_table[6]:                             
+                          tlb_tag(tlb_table[7]) == vpn(vaddr)? tlb_addr_table[7]:                             
+                          tlb_tag(tlb_table[8]) == vpn(vaddr)? tlb_addr_table[8]:                             
+                          tlb_tag(tlb_table[9]) == vpn(vaddr)? tlb_addr_table[9]:                             
+                          tlb_tag(tlb_table[10]) == vpn(vaddr)? tlb_addr_table[10]:                             
+                          tlb_tag(tlb_table[11]) == vpn(vaddr)? tlb_addr_table[11]:                             
+                          tlb_tag(tlb_table[12]) == vpn(vaddr)? tlb_addr_table[12]:                             
+                          tlb_tag(tlb_table[13]) == vpn(vaddr)? tlb_addr_table[13]:                             
+                          tlb_tag(tlb_table[14]) == vpn(vaddr)? tlb_addr_table[14]:                             
+                          tlb_tag(tlb_table[15]) == vpn(vaddr)? tlb_addr_table[15]:
+                          32'b0;
+      end
+   endfunction
+   
    // main logic
-   ///////////////////   
+   ///////////////////
+   function [31:0] lower32 (input [33:0] full_addr);
+      lower32 = full_addr[31:0];      
+   endfunction
+   
    function [33:0] l1_result(input [31:0] pte, input [31:0] vaddr);
       begin
          l1_result = {ppn1(pte), vpn0(vaddr), voffset(vaddr)};
@@ -429,22 +482,42 @@ module mmu(
             raise_pagefault_exception(5'd2, {level > 0, ppn0(pte), 16'b0},
                                       _mode, operation_cause, _vaddr);            
          end else begin
+            // NOTE: 34 -> 22
+            set_tlb(_vaddr, 
+                    level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr), 
+                    pte[9:0] | { 2'b00, //rsw
+                                 operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE, // dirty
+                                 1'b1, // accessed
+                                 6'b0 },
+                    req_addr); // req_addr == (pte's addr)
+            
             if (!is_accessed(pte, operation_cause, _mode)
                 || should_dirty_set(pte, operation_cause, _mode)) begin
                // v1.10.0 p.61
-               // TODO: change implementation to update A bit on PTE
-               raise_pagefault_exception(5'd3, {access_bit(pte), operation_cause, _mode, dirty_bit(pte), 23'b0}, 
-                                         _mode, operation_cause, _vaddr);
+               state <= UPDATING_PTE;
+
+               // back up query information
+               _paddr <= level? lower32(l1_result(pte, _vaddr)) : lower32(l0_result(pte, _vaddr));
+
+               // update pte on memory
+               // req_addr: as it is; it should be a pte read recently
+               request_enable <= 1'b1;
+               req_mode <= MEMREQ_WRITE;
+               req_wstrb <= 4'b1111;
+               req_wdata <=  to_le32(pte | {22'b0, // phys addr
+                                            2'b00, // rsw
+                                            operation_cause == CAUSE_MEM && _mode == MEMREQ_WRITE, // dirty
+                                            1'b1, // accessed
+                                            6'b0});
             end else begin            
                state <= WAITING_RESPONSE;
+               
+               request_enable <= 1'b1;
                req_mode <= _mode;
                req_wdata <= _wdata;
-               req_wstrb <= _wstrb;
+               req_wstrb <= _wstrb;               
                // NOTE: 34 -> 32
-               req_addr <= level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr);
-               // NOTE: 34 -> 22
-               set_tlb(_vaddr, level? l1_result(pte, _vaddr) : l0_result(pte, _vaddr), pte[9:0]);
-               request_enable <= 1'b1;
+               req_addr <= level? lower32(l1_result(pte, _vaddr)) : lower32(l0_result(pte, _vaddr));
             end
          end
       end
@@ -462,8 +535,8 @@ module mmu(
    wire [3:0]  _req_wstrb = (fetch_request_enable)? freq_wstrb:
                (mem_request_enable)? mreq_wstrb:
                1'b0;
-   wire _req_cause = (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;
-   wire [1:0] _req_cpu_mode = fetch_request_enable? actual_cpu_mode : mprv_cpu_mode;
+   wire        _req_cause = (fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM;
+   wire [1:0]  _req_cpu_mode = fetch_request_enable? actual_cpu_mode : mprv_cpu_mode;
    
    
    // NOTE: READ CAREFULLY: v1.10.0 - 4.3 Sv32
@@ -500,29 +573,41 @@ module mmu(
                   end else if ((!is_accessed(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode))
                                || should_dirty_set(tlb_to_pte(tlb_entry(_req_addr)), _req_cause, _req_mode)) begin
                      // v1.10.0 p.61
-                     // TODO: update A&D by hardware as QEMU does
+                     state <= UPDATING_PTE;
+
+                     // back up query information
+                     _mode <= _req_mode;                     
+                     _wdata <= _req_wdata;
+                     _wstrb <= _req_wstrb;                     
+                     _vaddr <= _req_addr;                     
+                     _paddr <= lower32({tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]});
+                     
+                     // update pte on tlb
+                     // TODO: update correctly
                      invalidate_pte(_req_addr);
-                     raise_pagefault_exception(5'd8, {access_bit(tlb_to_pte(tlb_entry(_req_addr))), 
-                                                      _req_cause, 
-                                                      _req_mode, 
-                                                      dirty_bit(tlb_to_pte(tlb_entry(_req_addr))), 
-                                                      23'b0}, 
-                                               _mode, _req_cause, _req_addr);                  
+
+                     // update pte on memory
+                     request_enable <= 1'b1;
+                     req_mode <= MEMREQ_WRITE;
+                     req_addr <= tlb_entry_addr(_req_addr);
+                     req_wstrb <= 4'b1111;
+                     req_wdata <= to_le32(tlb_to_pte(tlb_entry(_req_addr)) | {22'b0, // phys addr
+                                                                              2'b00, // rsw
+                                                                              _req_cause == CAUSE_MEM && _req_mode == MEMREQ_WRITE, // dirty
+                                                                              1'b1, // accessed
+                                                                              6'b0});                     
                   end else begin
                      state <= WAITING_RESPONSE;
+                     
                      request_enable <= 1'b1;
                      req_mode <= _req_mode;
                      req_wdata <= _req_wdata;
                      req_wstrb <= _req_wstrb;
-                     req_addr <= {tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]};
-                     
-                     // raise_accessfault_exception((fetch_request_enable)? CAUSE_FETCH: CAUSE_MEM,
-                     //                             _req_mode,
-                     //                             _req_addr,
-                     //                             {tlb_flags(tlb_entry(_req_addr)), 17'b0});
+                     req_addr <= lower32({tlb_phys(tlb_entry(_req_addr)), _req_addr[11:0]});                     
                   end
                end else begin
                   state <= FETCHING_FIRST_PTE;
+                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
                   req_addr <= {satp_ppn[19:0], 12'b0} + vpn1(_req_addr) * 4;
@@ -546,9 +631,11 @@ module mmu(
                   handle_leaf(1, resp_data_le);                  
                end else begin
                   // not a leaf node. 
-                  state <= FETCHING_SECOND_PTE;                  
+                  state <= FETCHING_SECOND_PTE;
+                  
                   request_enable <= 1'b1;
                   req_mode <= MEMREQ_READ;
+                  // NOTE: 34 -> 32; upper 2 bits are ignored.
                   req_addr <= {resp_data_le[29:10], 12'b0} + vpn0(_vaddr) * 4;
                end
             end
@@ -565,6 +652,14 @@ module mmu(
                                             _mode, operation_cause, _vaddr);               
                end
             end
+         end else if (state == UPDATING_PTE & response_enable) begin
+            state <= WAITING_RESPONSE;
+            
+            request_enable <= 1'b1;
+            req_mode <= _mode;
+            req_wdata <= _wdata;
+            req_wstrb <= _wstrb;
+            req_addr <= _paddr;
          end else if (state == WAITING_RESPONSE && response_enable) begin
             state <= WAITING_RECEIVE;
             // here we does not change endian.
